@@ -1018,7 +1018,7 @@ if mode != "NoIn":
   for key in tqdm(theta_0.keys(), desc=f"{merge_name} Merging..."):
     if args.vae is None and "first_stage_model" in key: continue
     if theta_1 and "model" in key and key in theta_1:    
-      if (usebeta or mode in ["TD", "DARE"]) and not key in theta_2:
+      if (usebeta or mode in ["TD"]) and not key in theta_2:
          continue
       weight_index = -1
       current_alpha = alpha
