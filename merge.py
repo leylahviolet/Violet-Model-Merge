@@ -18,10 +18,11 @@ import scipy.ndimage
 from scipy.ndimage import median_filter as filter
 import re
 import shutil
+import os
 import safetensors.torch
 import safetensors
 import random
-from tqdm.autonotebook import tqdm
+from tqdm.auto import tqdm
 
 FINETUNEX = ["IN","OUT","OUT2","CONT","BRI","COL1","COL2","COL3"]
 NUM_INPUT_BLOCKS = 12
@@ -547,34 +548,32 @@ def similarity_add_difference(a, b, c, alpha, beta):
     ab_sum = (1 - alpha / 2) * a + (alpha / 2) * b
     return (1 - similarity) * ab_diff + similarity * ab_sum
 
-def resize_tensors(tensor1, tensor2):
-    if len(tensor1.shape) not in [1, 2]:
-        return tensor1, tensor2
+def dare_merge(theta0, theta1, alpha, beta):
+    if len(theta0.shape) in [1, 2]:
+        # Pad along the last dimension (width)
+        if theta0.shape[-1] < theta1.shape[-1]:
+            padding_size = theta1.shape[-1] - theta0.shape[-1]
+            theta0 = F.pad(theta0, (0, padding_size, 0, 0))
+        elif theta1.shape[-1] < theta0.shape[-1]:
+            padding_size = theta0.shape[-1] - theta1.shape[-1]
+            theta1 = F.pad(theta1, (0, padding_size, 0, 0))
 
-    # Pad along the last dimension (width)
-    if tensor1.shape[-1] < tensor2.shape[-1]:
-        padding_size = tensor2.shape[-1] - tensor1.shape[-1]
-        tensor1 = F.pad(tensor1, (0, padding_size, 0, 0))
-    elif tensor2.shape[-1] < tensor1.shape[-1]:
-        padding_size = tensor1.shape[-1] - tensor2.shape[-1]
-        tensor2 = F.pad(tensor2, (0, padding_size, 0, 0))
-
-    # Pad along the first dimension (height)
-    if tensor1.shape[0] < tensor2.shape[0]:
-        padding_size = tensor2.shape[0] - tensor1.shape[0]
-        tensor1 = F.pad(tensor1, (0, 0, 0, padding_size))
-    elif tensor2.shape[0] < tensor1.shape[0]:
-        padding_size = tensor1.shape[0] - tensor2.shape[0]
-        tensor2 = F.pad(tensor2, (0, 0, 0, padding_size))
-
-    return tensor1, tensor2
-
-def dare_merge(theta0, theta1, alpha):
-    d = theta0.dtype
-    #theta0, theta1 = resize_tensors(theta0, theta1)
-    m = torch.bernoulli(torch.full_like(input=theta0.float(), fill_value=0.5), generator=rand_generator)
-    alpha = torch.mul(m, alpha / 0.5)
-    return torch.lerp(theta0.float(), theta1.float(), alpha).to(d)
+        # Pad along the first dimension (height)
+        if theta0.shape[0] < theta1.shape[0]:
+            padding_size = theta1.shape[0] - theta0.shape[0]
+            theta0 = F.pad(theta0, (0, 0, 0, padding_size))
+        elif theta1.shape[0] < theta0.shape[0]:
+            padding_size = theta0.shape[0] - theta1.shape[0]
+            theta1 = F.pad(theta1, (0, 0, 0, padding_size))
+    # Calculate the delta of the weights
+    delta = theta1 - theta0
+    # Generate the mask m^t from Bernoulli distribution
+    m = torch.from_numpy(np.random.binomial(1, beta, delta.shape)).to(theta0.dtype)
+    # Apply the mask to the delta to get δ̃^t
+    delta_tilde = m * delta
+    # Scale the masked delta by the dropout rate to get δ̂^t
+    delta_hat = delta_tilde / (1 - beta)
+    return theta0 + alpha * delta_hat
 
 def prune_model(theta, name, isxl=False):
     sd_pruned = dict()
@@ -716,7 +715,7 @@ if mode != "RM":
             model_2_name = args.m2_name if args.m2_name is not None else os.path.splitext(os.path.basename(model_2_path))[0]
             print(f"Loading {model_2_name}...")
             theta_2, model_2_sha256, model_2_hash, model_2_meta = load_model(model_2_path, device)
-        if mode in ["TRS","ST","TS","SIM","MD"]:
+        if mode in ["TRS","ST","TS","SIM","MD","DARE"]:
             usebeta = True
             weights_b, beta, beta_info = parse_ratio(args.beta, beta_info, deep_b)
 else:
@@ -733,6 +732,7 @@ if args.vae is not None:
 
 if mode == "DARE":
     rand_generator = torch.Generator()
+
 def filename_weighted_sum():
   a = model_0_name
   b = model_1_name
@@ -796,6 +796,15 @@ def filename_add_difference():
 
 def filename_nothing():
   return model_0_name
+
+def filename_dare():
+  a = model_0_name
+  b = model_1_name
+  Ma = round(1 - alpha, 2)
+  Mb = round(alpha, 2)
+  Mc = round(beta, 2)
+
+  return f"{Ma}({a}) + {Mb}({b}):{Mc} DARE"
 
 def blocker(blocks,blockids):
     blocks = blocks.split(" ")
@@ -900,7 +909,7 @@ theta_funcs = {
     "SIG":  (filename_sigmoid, None, sigmoid, "Sigmoid"),
     "GEO":  (filename_geom, None, geom, "Geometric"),
     "MAX":  (filename_max, None, weight_max, "Max"),
-    "DARE": (filename_weighted_sum, None, dare_merge, "DARE")
+    "DARE": (filename_dare, None, dare_merge, "DARE")
 }
 filename_generator, theta_func1, theta_func2, merge_name = theta_funcs[mode] 
 
@@ -1009,7 +1018,7 @@ if mode != "NoIn":
   for key in tqdm(theta_0.keys(), desc=f"{merge_name} Merging..."):
     if args.vae is None and "first_stage_model" in key: continue
     if theta_1 and "model" in key and key in theta_1:    
-      if (usebeta or mode == "TD") and not key in theta_2:
+      if (usebeta or mode in ["TD", "DARE"]) and not key in theta_2:
          continue
       weight_index = -1
       current_alpha = alpha
@@ -1042,7 +1051,7 @@ if mode != "NoIn":
       # this enables merging an inpainting model (A) with another one (B);
       # where normal model would have 4 channels, for latenst space, inpainting model would
       # have another 4 channels for unmasked picture's latent space, plus one channel for mask, for a total of 9
-      if cosine0:
+      elif cosine0:
         # skip VAE model parameters to get better results
         if "first_stage_model" in key: continue
         if "model" in key and key in theta_0:
@@ -1139,8 +1148,10 @@ if mode != "NoIn":
           ad = a
           result_is_instruct_pix2pix_model = False
           result_is_inpainting_model = False
-        if usebeta:
+        if usebeta and mode != "DARE":
           theta_0[key] = theta_func2(ad, b, c, current_alpha, current_beta)
+        elif usebeta:
+          theta_0[key] = theta_func2(ad, b, current_alpha, current_beta)
         else:
           theta_0[key] = theta_func2(ad, b, current_alpha)
       if any(item in key for item in FINETUNES) and fine:
@@ -1148,31 +1159,31 @@ if mode != "NoIn":
             if 5 > index : 
                 theta_0[key] =theta_0[key]* fine[index] 
             else :theta_0[key] =theta_0[key] + torch.tensor(fine[5]).to(theta_0[key].device)
-        
-  for key in tqdm(theta_1.keys(), desc="Remerging..."):
-        if key in checkpoint_dict_skip_on_merge:
-            continue
-        if "model" in key and key not in theta_0:
-            try:
-                if mode in ["TRS","ST"] and theta_2:
-                    b = theta_1[key]
-                    if key in theta_2:
-                        c = theta_2[key]
-                        current_beta = beta
-                        
-                        block,blocks26 = blockfromkey(key,isxl)
-                        if block == "Not Merge": continue
-                        weight_index = BLOCKIDXLL.index(blocks26) if isxl else BLOCKID.index(blocks26)
-                        if weight_index >= 0:
-                            if weights_b is not None:
-                                current_beta = weights_b[weight_index]
-                        if len(deep_b) > 0:
-                            current_beta = elementals(key,weight_index,deep_b,current_beta)
-                        theta_0[key] = weighted_sum(b, c, current_beta)
-                    else:
-                        theta_0.update({key:theta_1[key]})
-            except NameError:
-                theta_0.update({key:theta_1[key]})
+  if mode != "DARE":
+      for key in tqdm(theta_1.keys(), desc="Remerging..."):
+            if key in checkpoint_dict_skip_on_merge:
+                continue
+            if "model" in key and key not in theta_0:
+                try:
+                    if mode in ["TRS","ST"] and theta_2:
+                        b = theta_1[key]
+                        if key in theta_2:
+                            c = theta_2[key]
+                            current_beta = beta
+                            
+                            block,blocks26 = blockfromkey(key,isxl)
+                            if block == "Not Merge": continue
+                            weight_index = BLOCKIDXLL.index(blocks26) if isxl else BLOCKID.index(blocks26)
+                            if weight_index >= 0:
+                                if weights_b is not None:
+                                    current_beta = weights_b[weight_index]
+                            if len(deep_b) > 0:
+                                current_beta = elementals(key,weight_index,deep_b,current_beta)
+                            theta_0[key] = weighted_sum(b, c, current_beta)
+                        else:
+                            theta_0.update({key:theta_1[key]})
+                except NameError:
+                    theta_0.update({key:theta_1[key]})
   del theta_1
   try:
     if theta_2:
