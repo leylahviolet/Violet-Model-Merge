@@ -1030,7 +1030,7 @@ if mode != "NoIn":
       b = theta_1[key]
       al = list(theta_0[key].shape)
       bl = list(theta_1[key].shape)
-      if usebeta:
+      if usebeta and mode != "DARE":
         c = theta_2[key]
         cl = list(theta_2[key].shape)
       # check weighted and U-Net or not
