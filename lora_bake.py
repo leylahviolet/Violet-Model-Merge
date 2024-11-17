@@ -528,6 +528,7 @@ def pluslora(lora_list: list,model,output,model_path,device="cpu"):
                     # print(conved.size(), weight.size(), module.stride, module.padding)
                     weight = weight + ratio * conved * scale
                 theta_0[keychanger[msd_key]] = torch.nn.Parameter(weight)
+        del lora_sd
     #usemodelgen(theta_0,model)
     output_name = os.path.splitext(os.path.basename(output))[0]
     new_metadata = {"sd_merge_models": {}, "checkpoint": {}, "lora": {}}
