@@ -16,7 +16,7 @@ from Utils import wgt, rand_ratio, sha256, read_metadata_from_safetensors \
     , load_model, parse_ratio, qdtyper, maybe_to_qdtype, np_trim_percentiles \
     , diff_inplace, clone_dict_tensors, fineman, weighttoxl, BLOCKID, BLOCKIDFLUX \
     , BLOCKIDXLL, blockfromkey, checkpoint_dict_skip_on_merge, FINETUNES, elementals \
-    , to_half, to_half_k, prune_model, cache
+    , to_half, to_half_k, prune_model, cache, merge_cache_json
 
 # Mode Functions
 
@@ -148,6 +148,7 @@ else:
 output_name = args.output
 output_file = f"{output_name}.{'safetensors' if args.save_safetensors else 'ckpt'}"
 output_path = os.path.join(args.model_path, output_file)
+merge_cache_json(args.model_path)
 cache_data = cache("hashes", None)
 
 i = 0

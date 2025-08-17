@@ -15,7 +15,8 @@ from Utils import (
     LBLOCKS26,
     BLOCKID,
     cache,
-    dump_cache
+    dump_cache,
+    merge_cache_json
 )
 
 _re_digits = re.compile(r"\d+")
@@ -343,6 +344,7 @@ if __name__ == "__main__":
     parser.add_argument("--output", type=str, help="Output file name, without extension", default="merged", required=False)
     parser.add_argument("--device", type=str, help="Device to use, defaults to cpu", default="cpu", required=False)
     args = parser.parse_args()
+    merge_cache_json(args.model_path)
 
     ll  = get_loralist(args.loras)
     out = os.path.join(args.model_path, f"{args.output}.{'safetensors' if args.save_safetensors else 'ckpt'}")

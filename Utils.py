@@ -226,6 +226,21 @@ def to_half_k(sd, enable):
 
 cache_filename = os.path.join(os.getcwd(), "cache.json")
 
+def merge_cache_json(model_path):
+    if not os.path.exists(cache_filename):
+        open(cache_filename, 'w').write('')
+    with open(cache_filename, "r", encoding="utf-8") as f:
+        base = json.load(f)
+    if os.path.exists(os.path.join(model_path,"cache.json")):
+        with open(os.path.join(model_path,"cache.json"), "r", encoding="utf-8") as f:
+            update = json.load(f)
+        if isinstance(base, dict) and isinstance(update, dict):
+            base.update(update)
+        elif isinstance(base, list) and isinstance(update, list):
+            base.extend(update)
+        with open(cache_filename, "w", encoding="utf-8") as f:
+            json.dump(base, f, ensure_ascii=False, indent=2)
+    
 def dump_cache(cache_data):
     with filelock.FileLock(f"{cache_filename}.lock"):
         with open(cache_filename, "w", encoding="utf8") as f:
@@ -254,7 +269,7 @@ def model_hash(filename: str) -> str:
 def sha256_from_cache(filename: str, title: str, cache_data):
     hashes = cache("hashes", cache_data)
     h = hashes["hashes"].get(title)
-    if not h: return None
+    if not h: return None, None, None
     return h.get("sha256"), h.get("model_hash"), cache_data
 
 def calculate_sha256(filename: str, chunk_size: int = 4 * 1024 * 1024, max_workers: int = os.cpu_count() or 4) -> str:
@@ -275,9 +290,9 @@ def calculate_sha256(filename: str, chunk_size: int = 4 * 1024 * 1024, max_worke
     return hasher.hexdigest()
 
 def sha256(filename: str, title: str, cache_data) -> str:
-    cached = sha256_from_cache(filename, title, cache_data)
-    if cached is not None and cached[0]:
-        return cached[0]
+    cached = sha256_from_cache(filename, title, cache_data)[0]
+    if cached:
+        return cached
 
     print(f"Calculating sha256 for {filename}: ", end="")
     sha_val = calculate_sha256(filename)
@@ -367,6 +382,10 @@ def load_model(path: str, device, cache_data = None, verify_hash: bool = True):
     if verify_hash:
         title = f"checkpoint/{Path(path).stem}"
         s256, hashed, cache_data = sha256_from_cache(path, title, cache_data)
+        if not (s256 or hashed or cache_data):
+            sha256(path, title, cache_data)
+            s256, hashed, cache_data = sha256_from_cache(path, title, cache_data)
+            
 
     weights = get_state_dict_from_checkpoint(weights)
     if not verify_hash:
