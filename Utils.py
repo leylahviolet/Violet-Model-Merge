@@ -207,7 +207,7 @@ def parse_ratio(ratios, info, dp):
         prefix = f"preset:[{info}]," if info else ""
         info = f"{prefix}{round(ratio,3)},[{rounded},[{round_deep}]]"
     else:
-        ratio, weights, info = ratios, None, f"{round(ratios,3)}"
+        ratio, weights, info = ratios, [ratios]*25, f"{round(ratios,3)}"
     return weights, ratio, info
 
 
