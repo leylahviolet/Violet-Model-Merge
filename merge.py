@@ -7,7 +7,6 @@ import argparse
 import torch
 import torch.nn.functional as F
 import scipy.ndimage
-import os
 import safetensors.torch
 import safetensors
 from tqdm.auto import tqdm
@@ -16,7 +15,7 @@ from Utils import wgt, rand_ratio, sha256, read_metadata_from_safetensors \
     , load_model, parse_ratio, qdtyper, maybe_to_qdtype, np_trim_percentiles \
     , diff_inplace, clone_dict_tensors, fineman, weighttoxl, BLOCKID, BLOCKIDFLUX \
     , BLOCKIDXLL, blockfromkey, checkpoint_dict_skip_on_merge, FINETUNES, elementals \
-    , to_half, to_half_k, prune_model, cache, merge_cache_json
+    , to_half, to_half_k, prune_model, cache, merge_cache_json, detect_arch
 
 # Mode Functions
 
@@ -70,16 +69,82 @@ def dare_merge(theta0, theta1, alpha, beta):
         elif dh < 0:
             theta1 = F.pad(theta1, (0, 0, 0, -dh))
     delta = theta1 - theta0
-    m = torch.bernoulli(torch.full(delta.shape, beta, dtype = theta0.dtype, device = theta0.device))
-    delta_hat = (m * delta) / (1 - beta)
-    return theta0 + alpha * delta_hat
+    m = torch.bernoulli(torch.full(delta.shape, float(beta), dtype=torch.float32, device=theta0.device))
+    denom = max(1.0 - float(beta), 1e-6)
+    delta_hat = (m * delta) / denom
+    return theta0 + alpha * delta_hat.to(theta0.dtype)
+
+def ortho_merge(a, b, alpha):
+    a32 = a.detach().float().view(-1)
+    d32 = (b.detach().float() - a.detach().float()).view(-1)
+    proj = (torch.dot(d32, a32) / (a32.norm()**2 + 1e-12)) * a32
+    d_ortho = (d32 - proj).view_as(a)
+    return (a + alpha * d_ortho.to(a.dtype)).to(a.dtype)
+
+def sparse_topk(a, b, alpha, beta):
+    d = (b.detach().float() - a.detach().float()).abs().view(-1)
+    if d.numel() == 0:
+        return a
+    k = max(int(d.numel() * float(beta)), 1)
+    thresh = d.kthvalue(d.numel() - k).values
+    mask = ((b.detach().float() - a.detach().float()).abs() >= thresh).to(a.dtype)
+    return (a + alpha * (b - a) * mask).to(a.dtype)
+
+def norm_dir_blend(a, b, alpha):
+    a32 = a.detach().float().view(-1); b32 = b.detach().float().view(-1)
+    an = a32.norm() + 1e-12; bn = b32.norm() + 1e-12
+    au = a32 / an; bu = b32 / bn
+    du = F.normalize((1 - alpha) * au + alpha * bu, dim=0)
+    mag = (1 - alpha) * an + alpha * bn
+    out = (du * mag).view_as(a)
+    return out.to(a.dtype)
+
+def channel_cosine_gate(a, b, alpha, beta):
+    if a.dim() == 4:
+        axis = (1,2,3)
+    elif a.dim() == 2:
+        axis = (1,)
+    else:
+        return (1 - alpha) * a + alpha * b
+
+    a32 = a.detach().float()
+    b32 = b.detach().float()
+    num = (a32 * b32).sum(dim=axis)
+    den = (a32.norm(dim=axis) * b32.norm(dim=axis) + 1e-12)
+    cos = (num / den).clamp_(-1, 1)
+    g = (1 - cos) * float(beta)
+    while g.dim() < a.dim():
+        g = g.unsqueeze(-1)
+    mix = (1 - alpha) * a + alpha * b
+    return (a * (1 - g) + mix * g).to(a.dtype)
+
+def freq_band_blend(a, b, alpha, beta):
+    if a.dim() != 4 or a.shape[-1] < 3 or a.shape[-2] < 3:
+        return (1 - alpha) * a + alpha * b
+    a32 = a.detach().float(); b32 = b.detach().float()
+    A = torch.fft.rfft2(a32, norm="ortho")
+    B = torch.fft.rfft2(b32, norm="ortho")
+    H, W = a32.shape[-2], a32.shape[-1]
+    cut = max(int(min(H, W) * float(beta)), 1)
+    yy = torch.arange(A.shape[-2], device=a.device).view(-1,1).float()
+    xx = torch.arange(A.shape[-1], device=a.device).view(1,-1).float()
+    cy = (A.shape[-2]-1)/2; cx = (A.shape[-1]-1)/2
+    dist = torch.sqrt((yy-cy)**2 + (xx-cx)**2)
+    low = (dist <= cut).to(A.dtype)
+    high = 1 - low
+    M = low * ((1 - alpha) + alpha) + high * ((1 - alpha) + alpha)
+    Aout = low * ((1 - alpha) * A + alpha * A) + high * ((1 - alpha) * A + alpha * B)
+    Bout = low * ((1 - alpha) * B + alpha * A) + high * ((1 - alpha) * B + alpha * B)
+    F = low * Aout + high * Bout
+    out = torch.fft.irfft2(F, s=(H, W), norm="ortho")
+    return out.to(a.dtype)
 
 # Mode name assignment
 
 theta_funcs = {
     "WS":   (None,           weighted_sum,               "Weighted Sum"),
     "AD":   (get_difference, add_difference,             "Add Difference"),
-    "RD":   (None,           None,                       "Read Metedata"),
+    "RM":   (None,           None,                       "Read Metedata"),
     "sAD":  (get_difference, add_difference,             "Smooth Add Difference"),
     "MD":   (None,           multiply_difference,        "Multiply Difference"),
     "SIM":  (None,           similarity_add_difference,  "Similarity Add Difference"),
@@ -91,9 +156,14 @@ theta_funcs = {
     "SIG":  (None,           sigmoid,                    "Sigmoid"),
     "GEO":  (None,           geometric,                  "Geometric"),
     "MAX":  (None,           weight_max,                 "Max"),
-    "DARE": (None,           dare_merge,                 "DARE")
+    "DARE": (None,           dare_merge,                 "DARE"),
+    "ORTHO":(None,           ortho_merge,                "Orthogonalized Delta"),
+    "SPRSE":(None,           sparse_topk,                "Sparse Top-k Delta"),
+    "NORM": (None,           norm_dir_blend,             "Norm/Direction Split"),
+    "CHAN": (None,           channel_cosine_gate,        "Channel-wise Cosine Gate"),
+    "FREQ": (None,           freq_band_blend,            "Frequency-Band Blend"),
 }
-modes_need_m2   = {"sAD", "AD", "TRS", "ST",  "TD", "SIM", "MD"}
+modes_need_m2   = {"sAD", "AD", "TRS", "ST",  "TD", "SIM", "MD", "SPRSE", "HUB", "CHAN", "FREQ"}
 modes_need_beta = {"TRS", "ST", "TS",  "SIM", "MD", "DARE"}
 
 parser = argparse.ArgumentParser(description="Merge two or three models")
@@ -115,18 +185,21 @@ for p in ["alpha","beta"]:
     parser.add_argument(f"--rand_{p}", type=str, help=f"Random {p.capitalize()} value, optional", default=None, required=False)
 
 for flag, helpmsg in {
-    "cosine0":          "Favor model 0's structure with details from 1",
-    "cosine1":          "Favor model 1's structure with details from 0",
+    "cosine0":          "Favor model 0's structure with details from the others (two/three models)",
+    "cosine1":          "Favor model 1's structure with details from the others (two/three models)",
+    "cosine2":          "Favor model 2's structure with details from the others (three models only)",
     "save_half":        "Save as float16",
     "save_quarter":     "Save as float8",
     "save_safetensors": "Save as .safetensors",
     "keep_ema":         "Keep ema",
     "delete_source":    "Delete the source checkpoint file",
     "no_metadata":      "Save without metadata",
-    "prune":            "Prune Model"
+    "prune":            "Prune Model",
+    "force":            "Overwrite output if exists",
 }.items():
     parser.add_argument(f"--{flag}", action="store_true", help=helpmsg, required=False)
 
+parser.add_argument("--seed",   type=int,   default=None, help="Random seed for stochastic modes (e.g., DARE)")
 parser.add_argument("--vae",    type=str,   help="Path of VAE", default=None, required=False)
 parser.add_argument("--fine",   type=str,   help="Finetune the given keys on model 0", default=None, required=False)
 parser.add_argument("--output",             help="Output file name without extension", default="merged", required=False)
@@ -135,11 +208,20 @@ parser.add_argument("--device", type=str,   help="Device to use, defaults to cpu
 args = parser.parse_args()
 device = args.device
 mode = args.mode
+if mode in modes_need_m2 and (args.model_2 is None):
+    raise SystemExit(f"mode '{mode}' needs 3rd model")
 theta_func1, theta_func2, merge_name = theta_funcs[mode]
 
 args.alpha, deep_a, block_a = wgt(args.alpha, [])
 args.beta,  deep_b, block_b = wgt(args.beta, [])
 useblocks = block_a or block_b
+
+cos_flags = [args.cosine0, args.cosine1, args.cosine2]
+if sum(1 for f in cos_flags if f) > 1:
+    raise SystemExit("cosine0, cosine1 and cosine2 cannot be posed at same time, choose one only")
+
+if args.cosine2 and (args.model_2 is None):
+    raise SystemExit("--cosine2 cannot be used when there are only 2 models given")
 
 if mode == "WS" and (args.cosine0 ^ args.cosine1):
     cosine0, cosine1 = args.cosine0, args.cosine1
@@ -153,23 +235,20 @@ cache_data = cache("hashes", None)
 
 i = 0
 while os.path.isfile(output_path):
-    overwrite = input("Output file already exists. Overwrite? (y/n): ")
-    while overwrite not in ("y","n"):
-        overwrite = input("Please enter y or n\nOutput file already exists. Overwrite? (y/n): ")
-    if overwrite == "y":
-        os.remove(output_path)
-    else:
-        output_name = f"{args.output}_{i:02}"
-        output_file = f"{output_name}.{'safetensors' if args.save_safetensors else 'ckpt'}"
-        output_path = os.path.join(args.model_path, output_file)
-        i += 1
-        print(f"Assigned result checkpoint name as {output_file}\n")
+    if args.force:
+        os.remove(output_path); break
+    output_name = f"{args.output}_{i:02}"
+    output_file = f"{output_name}.{'safetensors' if args.save_safetensors else 'ckpt'}"
+    output_path = os.path.join(args.model_path, output_file)
+    i += 1
+    if not os.path.isfile(output_path): print(f"Assigned result checkpoint name as {output_file}\n")
 
 stem = lambda p: os.path.splitext(os.path.basename(p))[0]
 
+torch.set_grad_enabled(False)
+
 alpha_seed = beta_seed = None
 alpha_info = beta_info = ""
-deep_a = deep_b = None
 if args.rand_alpha is not None:
     args.alpha, alpha_seed, deep_a, alpha_info = rand_ratio(args.rand_alpha)
 if args.rand_beta is not None:
@@ -200,8 +279,7 @@ if mode != "NoIn":
     print(f"Loading {model_1_name}...")
     theta_1, model_1_sha256, model_1_hash, model_1_meta, cache_data = load_model(model_1_path, device, cache_data=cache_data)
     qd1 = qdtyper(theta_1)
-    isxl = "conditioner.embedders.1.model.transformer.resblocks.9.mlp.c_proj.weight" in theta_1.keys()
-    isflux = any("double_block" in k for k in theta_1.keys())
+    isxl, isflux = detect_arch(theta_1)
 
     weights_a, alpha, alpha_info = parse_ratio(args.alpha, alpha_info, deep_a)
     if mode in modes_need_m2:
@@ -227,25 +305,30 @@ if args.vae:
     vae, *_ = load_model(args.vae, device, verify_hash=False)
 
 if mode == "DARE":
-    rand_generator = torch.Generator()
+    g = torch.Generator(device=device if device != "cpu" else "cpu")
+    if args.seed is not None: g.manual_seed(args.seed)
 
-def cosine_scores(theta0, theta1, mode_desc, variant=0):
-    sim = torch.nn.CosineSimilarity(dim=0)
+def cosine_minmax(base_dict, other_dict, desc, variant=0):
     vals = []
-    for k in tqdm(theta0.keys(), desc=mode_desc):
-        if "first_stage_model" in k: 
+    for k in tqdm(base_dict.keys(), desc=desc):
+        if "first_stage_model" in k or "model" not in k or k not in other_dict:
             continue
-        if "model" in k and k in theta1:
-            a = theta0[k].to(torch.float32)
-            b = theta1[k].to(torch.float32)
-            if variant == 0:
-                vals.append(sim(F.normalize(a, p=2, dim=0), F.normalize(b, p=2, dim=0)).item())
-            else:
-                coss = sim(a, b)
-                dot  = torch.dot(a.view(-1), b.view(-1))
-                mag  = dot / (torch.norm(a) * torch.norm(b))
-                vals.append(((coss + mag) * 0.5).item())
-    return np_trim_percentiles(np.asarray(vals, dtype=np.float64))
+        a = base_dict[k].detach().float().view(-1)
+        b = other_dict[k].detach().float().view(-1)
+        if a.numel() == 0 or b.numel() == 0 or a.shape != b.shape:
+            continue
+        simab = F.cosine_similarity(a, b, dim=0).item()
+        if variant == 0:
+            vals.append(simab)
+        else:
+            dot = torch.dot(a, b).item()
+            denom = float(a.norm().item() * b.norm().item())
+            mag = (dot / denom) if denom != 0.0 else 0.0
+            vals.append(0.5 * (simab + mag))
+    arr = np_trim_percentiles(np.asarray(vals, dtype=np.float64))
+    if arr.size == 0 or not np.isfinite(arr).any():
+        return 0.0, 1.0
+    return float(np.nanmin(arr)), float(np.nanmax(arr))
 
 if theta_func1:
     if isflux:
@@ -276,14 +359,18 @@ if args.use_dif_20:
     diff_inplace(theta_2, theta_3, get_difference, "Getting Difference of Model 0 and 2")
     del theta_3
 
-# favors model A's structure with details from B
-if cosine0:
-    sims = cosine_scores(theta_0, theta_1, "Caluculating Cosine 0", variant=0)
+def resolve_cosine_triplet(theta_0, theta_1, theta_2, use_cos0, use_cos1, use_cos2):
+    if use_cos0:
+        base, dA, dB = theta_0, theta_1, theta_2
+        varA, varB = 0, 0
+    elif use_cos1:
+        base, dA, dB = theta_1, theta_0, theta_2
+        varA, varB = 1, 0
+    else:
+        base, dA, dB = theta_2, theta_0, theta_1
+        varA, varB = 0, 0
+    return base, dA, dB, varA, varB
 
-# favors model B's structure with details from A
-if cosine1:
-    sims = cosine_scores(theta_0, theta_1, "Caluculating Cosine 1", variant=1)
-    
 if mode != "NoIn":
     if args.fine:
         fine = fineman([float(t) for t in args.fine.split(",")], isxl)
@@ -313,25 +400,110 @@ def _resolve_weight_index(key):
     return -1
 
 def _apply_cosine_blend(a, b, kmin, kmax, cur_alpha, variant):
-    if variant == 0:
-        a = F.normalize(a.float(), p=2, dim=0)
-        b = F.normalize(b.float(), p=2, dim=0)
-        simab = torch.nn.functional.cosine_similarity(a, b, dim=0)
-        combined = simab
-    else:
-        simab = torch.nn.functional.cosine_similarity(a.float(), b.float(), dim=0)
-        dot   = torch.dot(a.float().view(-1), b.float().view(-1))
-        mag   = dot / (a.float().norm() * b.float().norm())
-        combined = 0.5 * (simab + mag)
-
-    k = ((combined - kmin) / (kmax - kmin) - abs(cur_alpha)).clamp_(0, 1)
+    a_f = a.detach().float()
+    b_f = b.detach().float()
+    simab = F.cosine_similarity(a_f.view(-1), b_f.view(-1), dim=0)
+    if variant == 1:
+        dot = torch.dot(a_f.view(-1), b_f.view(-1))
+        denom = (a_f.norm() * b_f.norm())
+        mag = dot / denom if denom != 0 else torch.tensor(0., device=a.device)
+        simab = 0.5 * (simab + mag)
+    k = ((simab - kmin) / max(kmax - kmin, 1e-6) - abs(float(cur_alpha))).clamp_(0, 1)
     return b * (1 - k) + a * k
 
-def _finetune_inplace(key, tens):
-    if any(item in key for item in FINETUNES) and fine:
-        idx = FINETUNES.index(key)
-        return tens * fine[idx] if idx < 5 else tens + torch.tensor(fine[5], device=tens.device)
+def _finetune_inplace(key, tens, fine):
+    if not fine:
+        return tens
+
+    if isinstance(fine, dict) and isflux:
+        mul = fine.get("mul", {})
+        m = 1.0
+
+        if any(s in key for s in ("double_block", "double_blocks", "db.")):
+            m *= mul.get("double_block", 1.0)
+        if any(s in key for s in (".img_in", "image_in", "image_proj")):
+            m *= mul.get("img_in", 1.0)
+        if any(s in key for s in (".txt_in", "context_in", "text_in", "clip_proj")):
+            m *= mul.get("txt_in", 1.0)
+        if any(s in key for s in ("time_in", "time_embed", "timestep", "vector_in")):
+            m *= mul.get("time", 1.0)
+        if any(s in key for s in (".out.", "final_layer", "vector_out")) or key.endswith(".out"):
+            m *= mul.get("out", 1.0)
+
+        if m != 1.0:
+            tens = tens * torch.as_tensor(m, device=tens.device, dtype=tens.dtype)
+
+        add = float(fine.get("add", 0.0) or 0.0)
+        if add and (key.endswith(".bias") or ".bias" in key):
+            tens = tens + torch.as_tensor(add, device=tens.device, dtype=tens.dtype)
+
+        return tens
+
+    if isinstance(fine, list):
+        idx = next((i for i, pat in enumerate(FINETUNES) if pat in key), -1)
+        if idx == -1:
+            return tens
+
+        if idx < 5:
+            return tens * torch.as_tensor(fine[idx], device=tens.device, dtype=tens.dtype)
+        else:
+            f5 = fine[5]
+            if isinstance(f5, (list, tuple)) and len(f5) > 0:
+                bias = float(f5[0])
+            elif isinstance(f5, (int, float)):
+                bias = float(f5)
+            else:
+                bias = 0.0
+            if bias:
+                return tens + torch.as_tensor(bias, device=tens.device, dtype=tens.dtype)
+            return tens
+
     return tens
+
+use_cos0 = bool(args.cosine0)
+use_cos1 = bool(args.cosine1)
+use_cos2 = bool(args.cosine2)
+
+if use_cos0 or use_cos1 or use_cos2:
+    base, dA, dB, varA, varB = resolve_cosine_triplet(theta_0, theta_1, theta_2, use_cos0, use_cos1, use_cos2)
+
+    kminA, kmaxA = cosine_minmax(base, dA, "Cosine(base vs A)", variant=varA)
+    if dB is not None:
+        kminB, kmaxB = cosine_minmax(base, dB, "Cosine(base vs B)", variant=varB)
+    else:
+        kminB = kmaxB = None
+        
+    theta_res = clone_dict_tensors(base)
+
+    for key in tqdm(base.keys(), desc="Cosine structure-based blending..."):
+        if "first_stage_model" in key or "model" not in key:
+            continue
+        if key not in dA:
+            continue
+
+        wi = _resolve_weight_index(key)
+        if wi < 0:
+            continue
+
+        cur_a, cur_b = alpha, beta
+        if wi > 0:
+            if weights_a is not None:            cur_a = weights_a[wi - 1]
+            if (weights_b is not None) and dB is not None: cur_b = weights_b[wi - 1]
+        if deep_a: cur_a = elementals(key, wi, deep_a, cur_a)
+        if deep_b and dB is not None: cur_b = elementals(key, wi, deep_b, cur_b)
+
+        a = base[key]
+        b = dA[key]
+
+        out = _apply_cosine_blend(a, b, kminA, kmaxA, cur_a, variant=varA)
+
+        if dB is not None and (key in dB) and (cur_b is not None):
+            out = _apply_cosine_blend(out, dB[key], kminB, kmaxB, cur_b, variant=varB)
+
+        out = _finetune_inplace(key, out)
+        theta_res[key] = out
+
+    theta_0 = theta_res
 
 if mode != "NoIn":
     for key in tqdm(theta_0.keys(), desc=f"{merge_name} Merging..."):
@@ -358,39 +530,27 @@ if mode != "NoIn":
         if deep_a: cur_a = elementals(key, wi, deep_a, cur_a)
         if deep_b: cur_b = elementals(key, wi, deep_b, cur_b)
 
-        if cosine0:
-            if "first_stage_model" in key:  continue
-            theta_0[key] = _apply_cosine_blend(a, b, sims.min(), sims.max(), cur_a, variant=0)
-            theta_0[key] = _finetune_inplace(key, theta_0[key])
-            continue
-        if cosine1:
-            if "first_stage_model" in key:  continue
-            theta_0[key] = _apply_cosine_blend(a, b, sims.min(), sims.max(), cur_a, variant=1)
-            theta_0[key] = _finetune_inplace(key, theta_0[key])
-            continue
-
         if mode == "sAD":
-            filt = scipy.ndimage.gaussian_filter(
-                scipy.ndimage.median_filter(b.float().cpu().numpy(), size=3),
-                sigma=1
-            )
-            theta_0[key] = a + cur_a * torch.tensor(filt, device=a.device)
-            theta_0[key] = _finetune_inplace(key, theta_0[key])
-            continue
+            bf = b.detach().float()
+            filt = scipy.ndimage.gaussian_filter(bf.cpu().numpy(), sigma=1)
+            theta_0[key] = a + cur_a * torch.from_numpy(filt).to(a.device, dtype=a.dtype)
+            theta_0[key] = _finetune_inplace(key, theta_0[key]); continue
 
         if mode == "TD":
-            if torch.allclose(theta_1[key].float(), theta_2[key].float(), rtol=0, atol=0):
+            t1 = theta_1[key].float()
+            t2 = theta_2[key].float()
+            t0 = theta_0[key].float()
+            if torch.allclose(t1, t2, rtol=0, atol=0):
                 theta_2[key] = theta_0[key]
                 continue
-            diff_AB   = (theta_1[key].float() - theta_2[key].float()).abs()
-            dist_A0   = (theta_1[key].float() - theta_2[key].float()).abs()
-            dist_A1   = (theta_1[key].float() - theta_0[key].float()).abs()
-            denom     = dist_A0 + dist_A1
-            scale     = torch.where(denom != 0, dist_A1 / denom, torch.tensor(0., device=a.device))
-            scale     = torch.sign(theta_1[key].float() - theta_2[key].float()) * scale.abs()
-            theta_0[key] = theta_0[key] + (scale * diff_AB) * (cur_a * 1.8)
-            theta_0[key] = _finetune_inplace(key, theta_0[key])
-            continue
+            diff_AB = (t1 - t2).abs()
+            dist_A0 = (t1 - t0).abs()
+            dist_A2 = (t1 - t2).abs()
+            denom = dist_A0 + dist_A2
+            scale = torch.where(denom != 0, dist_A0 / denom, torch.tensor(0., device=t0.device))
+            scale = torch.sign(t1 - t2) * scale.abs()
+            theta_0[key] = (t0 + (scale * diff_AB) * (cur_a * 1.8)).to(theta_0[key].dtype)
+            theta_0[key] = _finetune_inplace(key, theta_0[key]); continue
 
         if mode == "TS":
             if a.dim() == 0:
@@ -407,10 +567,9 @@ if mode != "NoIn":
             theta_0[key] = _finetune_inplace(key, theta_0[key])
             continue
 
-        if al != bl and (al[:1] + al[2:] == bl[:1] + bl[2:]):
-            # A: 9ch(inpaint), B: 4ch(normal)
-            assert al[1] == 9 and bl[1] == 4, f"Bad dimensions for merged layer {key}: A={al}, B={bl}"
-            ad = a[:, :4, :, :]
+        if al != bl and len(al) == 4 and len(bl) == 4 and al[0]==bl[0] and al[2:]==bl[2:]:
+            use = min(al[1], bl[1], 4)
+            ad = a[:, :use, ...]
         else:
             ad = a
 
@@ -456,13 +615,13 @@ if mode != "NoIn":
         pass
 
 else:
-    isxl = "conditioner.embedders.1.model.transformer.resblocks.9.mlp.c_proj.weight" in theta_0
+    isxl, isflux = detect_arch(theta_0)
     if args.fine:
-        fine = fineman([float(t) for t in args.fine.split(",")], isxl)
+        fine = fineman([float(t) for t in args.fine.split(",")], isxl, isflux)
         for key in tqdm(theta_0.keys(), desc="Fine Tuning ..."):
             if args.vae is None and "first_stage_model" in key:
                 continue
-            theta_0[key] = _finetune_inplace(key, theta_0[key])
+            theta_0[key] = _finetune_inplace(key, theta_0[key], fine)
     else:
         fine = ""
         
@@ -473,8 +632,7 @@ if args.vae:
             theta_0[tk] = to_half(vae[k], args.save_half)
     del vae
 
-isxl   = "conditioner.embedders.1.model.transformer.resblocks.9.mlp.c_proj.weight" in theta_0
-isflux = any("double_block" in k for k in theta_0)
+isxl, isflux = detect_arch(theta_0)
 
 if isxl:
     for k in tqdm([k for k in theta_0.keys() if "cond_stage_model." in k], desc="Cond resolving..."):

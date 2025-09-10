@@ -1,119 +1,221 @@
 # Chattiori's Model Merger
 
-This script merges stable-diffusion models with the settings of checkpoint merger at a user-defined ratio.  
-You can use ckpt and safetensors as checkpoint file.  
-This script isn't need to be loaded on GPU.
+A fast, deterministic **checkpoint merger** for Stable Diffusion–family models (SD1.x/2.x/XL) and **Flux.1** (auto-detected).  
+Supports **`.ckpt`** and **`.safetensors`**. Runs on **CPU by default** (GPU optional).
 
-The mode is:
+---
 
-- "WS" for Weighted Sum
-- "SIG" for Sigmoid Merge
-- "GEO" for Geometric Merge
-- "MAX" for Max Merge
-- "AD" for Add Difference (requires model2)
-- "sAD" for Smooth Add Difference (requires model2)
-- "MD" for Multiply Difference (requires model2 and beta)
-- "SIM" for Similarity Add Difference (requires model2 and beta)
-- "TD" for Train Difference (requires model2)
-- "TRS" for Triple Sum (requires model2 and beta)
-- "TS" for Tensor Sum (requires beta)
-- "ST" for Sum Twice (requires model2 and beta)
-- "NoIn" for No Interporation
-- "RM" for Read Metadata
-- "DARE" for DARE Merge
+## Highlights
 
-The ratio works as follows:
+- ✅ 2-model and 3-model merges  
+- ✅ **Cosine structure modes** (`--cosine0/1/2`) to keep one model’s **structure** while blending **details** from others  
+- ✅ Block-weighted / Elemental ratios, plus random ratio samplers  
+- ✅ Extra modes: orthogonal delta, sparse top-k, channel-wise cosine gate, frequency-band mix, etc.  
+- ✅ VAE bake-in, pruning, EMA keep, fp16/fp8 saving, rich metadata
 
-- 0.5 is a 50/50 mix of model0 and model1
-- 0.3 is a 70/30 mix with more influence from model0 than model1
+---
 
-## Running it
+## Architectures & Formats
 
-If you aren't using Automatic's web UI or are comfortable with the command line, you can also run `merge.py` directly.
-Just like with the .bat method, I'd recommend creating a folder within your stable-diffusion installation's main folder. This script requires torch to be installed, which you most likely will have installed in a venv inside your stable-diffusion webui install.
-- Requires pytorch safetensors
-- Navigate to the merge folder in your terminal
-- Activate the venv
-  - For users of Automatic's Webui use
-    - `..\venv\Scripts\activate`
-  - For users of [sd-webui](https://github.com/sd-webui/stable-diffusion-webui) (formerly known as HLKY) you should just be able to do
-    - `conda activate ldm`
-- run merge.py with arguments
-  - Form: `python merge.py mode model_path model_0 model_1 --alpha 0.5 --output merged`
-  - Example: `python merge.py "WS" "C:...\Model parent file path" "FILE A.ckpt" "FILE B.safetensors" --alpha 0.45 --vae "C:...\VAE.safetensors" --prune --save_half --output "MERGED"`
-    - Optional: `--model_2` sets the tertiory model, if omitted
-    - Optional: `--alpha` controls how much weight is put on the second model. Defaults to 0, if omitted  
-    Can be written in float value, [Merge Block Weight type writing](https://github.com/bbc-mc/sdweb-merge-block-weighted-gui/blob/master/README.md) and [Elemental Merge type writing](https://github.com/hako-mikan/sd-webui-supermerger/blob/main/elemental_en.md).
-    - Optional: `--rand_alpha` randomizes weight put on the second model, if omitted  
-    Need to be written in str like `"MIN, MAX, SEED"`.  
-    If SEED is not setted, it will be completely random (generates seed).  
-    Or `"MIN, MAX, SEED, [Elemental merge args]"` if you want to specify.  
-    Check out [Elemental Random](https://github.com/Faildes/merge-models/blob/main/elemental_random.md) for Elemental merge args.
-    - Optional: `--beta` controls how much weight is put on the third model. Defaults to 0, if omitted  
-    Can be written in float value, Merge Block Weight type writing and Elemental Merge type writing.
-    - Optional: `--rand_beta` randomizes weight put on the third model, if omitted  
-    Need to be written in str like `"MIN, MAX, SEED"`.   
-    If SEED is not setted, it will be completely random (generates seed).  
-    Or `"MIN, MAX, SEED, [Elemental merge args]"` if you want to specify.  
-    Check out [Elemental Random](https://github.com/Faildes/merge-models/blob/main/elemental_random.md) for Elemental merge args.
-    - Optional: `--vae` sets the vae file by set the path, if omitted.  
-      If not, the vae stored inside the model will automatically discarded.
-    - Optional: `--m0_name` determines the name that to write in the data for the model0, if omitted
-    - Optional: `--m1_name` determines the name that to write in the data for the model1, if omitted
-    - Optional: `--m2_name` determines the name that to write in the data for the model2, if omitted
-    - Optional: `--cosine0` determines to favor model0's structure with details from 1, if omitted  
-    Check out [Calcmode](https://github.com/hako-mikan/sd-webui-supermerger/blob/main/calcmode_en.md) by hako-mikan for the information.
-    - Optional: `--cosine1` determines to favor model1's structure with details from 0, if omitted  
-    Check out [Calcmode](https://github.com/hako-mikan/sd-webui-supermerger/blob/main/calcmode_en.md) by hako-mikan for the information.
-    - Optional: `--use_dif_10` determines to use the difference between model0 and model1 as model1, if omitted
-    - Optional: `--use_dif_20` determines to use the difference between model0 and model2 as model2, if omitted
-    - Optional: `--use_dif_21` determines to use the difference between model2 and model1 as model2, if omitted
-    - Optional: `--fine` determines adjustment of details, if omitted  
-    Check out [Elemental EN](https://github.com/hako-mikan/sd-webui-supermerger/blob/main/elemental_en.md#adjust) by hako-mikan for the information.
-    - Optional: `--save_half` determines whether save the file as fp16, if omitted
-    - Optional: `--prune` determines whether prune the model, if omitted
-    - Optional: `--keep_ema` determines keep only ema while prune, if omitted
-    - Optional: `--save_safetensors` determines whether save the file as safetensors, if omitted
-    - Optional: `--output` is the filename of the merged file, without file extension. Defaults to "merged", if omitted
-    - Optional: `--functn` determines whether add merge function names, if omitted
-    - Optional: `--delete_source` determines whether to delete the source checkpoint files, not vae file, if omitted
-    - Optional: `--no_metadata` saves the checkpoint without metadata, if omitted
-    - Optional: `--device` is the device that's going to be used to merge the models. Unless you have a ton of VRAM, you should probably just ignore this. Defaults to 'cpu', if omitted.
-      - For `.ckpt` files, required VRAM seems to be roughly equivalent to the size of `(size of both models) * 1.15`. Merging 2 models at 3.76GB resulted in rougly 8.6GB of VRAM usage on top of everything else going on.
-      - For `.safetensors`, required VRAM seems to be roughly equivalent to the size of `size of both models`. Merging 2 models at 3.76GB resulted in rougly 7.5GB of VRAM usage on top of everything else going on.
-      - If you have enough VRAM to merge on your GPU you can use `--device "cuda:x"` where x is the card corresponding to the output of `nvidia-smi -L`
+- **Architectures:** SD 1.x / 2.x / XL and **Flux.1** (via `detect_arch`)
+- **Checkpoints:** `.ckpt` (PyTorch) and `.safetensors`
+- **VAE:** Optional bake-in with `--vae`
+- **DTypes:** fp32 (default), **fp16** (`--save_half`), **fp8** (`--save_quarter`, experimental)
 
-### For Colab users
+---
 
-- Install required scripts.  
-`!pip install torch safetensors` *for safetensors*  
-`!pip install pytorch_lighting` *for ckpt*  
+## Modes
 
-- Clone this repo.  
-`!cd /content/`  
-`!git clone https://github.com/Faildes/merge-models`
+Pick one `mode` (first positional arg). Some require a third model or `beta`.
 
-- Make `models` file and `vae` file.  
-`!mkdir models`  
-`!mkdir vae`
+| Code   | Name                         | Needs model_2 | Needs `beta` | Notes |
+|-------:|------------------------------|:-------------:|:------------:|------|
+| `WS`   | Weighted Sum                 |       ✗       |      ✗       | Standard linear mix |
+| `SIG`  | Sigmoid                      |       ✗       |      ✗       | Smooth non-linear |
+| `GEO`  | Geometric                    |       ✗       |      ✗       | Geometric mean |
+| `MAX`  | Max                          |       ✗       |      ✗       | Element-wise max |
+| `AD`   | Add Difference               |       ✓       |      ✗       | Uses (model1 − model2) |
+| `sAD`  | Smooth Add Difference        |       ✓       |      ✗       | Median+Gaussian filtered diff |
+| `MD`   | Multiply Difference          |       ✓       |      ✓       | Non-linear diff product |
+| `SIM`  | Similarity Add Difference    |       ✓       |      ✓       | Similarity-aware lerp |
+| `TD`   | Train Difference             |       ✓       |      ✗       | Data-dependent scaling |
+| `TRS`  | Triple Sum                   |       ✓       |      ✓       | α/β tri-blend |
+| `TS`   | Tensor Sum                   |       ✗       |      ✓       | Splice by ranges |
+| `ST`   | Sum Twice                    |       ✓       |      ✓       | Two-stage sum |
+| `NoIn` | No Interpolation             |       ✗       |      ✗       | No blending; combine with `--fine` |
+| `RM`   | Read Metadata                |       ✗       |      ✗       | Prints SHA256 + metadata and exits |
+| `DARE` | DARE                         |       ✗       |      ✓       | Stochastic delta resampling |
+| `ORTHO`| Orthogonalized Delta         |       ✗       |      ✗       | Apply diff orthogonal to base |
+| `SPRSE`| Sparse Top-k Delta           |   **✓**\*    |      ✗       | Applies largest diffs (uses α) |
+| `NORM` | Norm/Direction Split         |       ✗       |      ✗       | Blend magnitude & direction separately |
+| `CHAN` | Channel-wise Cosine Gate     |   **✓**\*    |      ✗       | Gate per output channel (Conv/Linear) |
+| `FREQ` | Frequency-Band Blend         |   **✓**\*    |      ✗       | Low/high-freq mix for Conv kernels |
 
-- After installing models and vaes to the right directory,  
-Run `merge.py`.   
-`!cd /content/merge-models/`  
-`!python merge.py...`
+\* In the current code, `SPRSE`, `CHAN`, and `FREQ` are marked as “needs model_2”.
 
-## Potential Problems & Troubleshooting
+---
 
-- Depending on your operating system and specific installation of python you might need to replace `python` with `py`, `python3`, `conda` or something else entirely.
+## Cosine Structure Modes
+
+Use **exactly one** of: `--cosine0`, `--cosine1`, `--cosine2` (mutually exclusive).
+
+- `--cosine0`: **Model 0** defines the **structure**; inject details from Model 1 (and Model 2 if present)
+- `--cosine1`: **Model 1** defines the **structure**; inject details from the others
+- `--cosine2`: **Model 2** defines the **structure**; inject details from Model 0 then Model 1 (**requires** `--model_2`)
+
+These modes compute per-layer cosine stats between the **base (structure)** and **detail** models, then blend using your **`alpha`** (detail A) and **`beta`** (detail B) with block/elemental weights.
+
+---
+
+## Ratios & Block Weights
+
+- `--alpha`, `--beta` accept:
+  - A **float** (`0.45`, etc.)
+  - **Merge Block Weights** string (19/25-length, etc.)
+  - **Elemental Merge** syntax
+- `--rand_alpha`, `--rand_beta` accept `"MIN, MAX[, SEED][, elemental...]"`  
+  If `SEED` omitted, a random seed is generated.
+- **XL note:** 25-length weights auto-convert for XL; 19-length is supported.
+
+Rule of thumb: `--alpha 0.5` ≈ 50/50 of model0 & model1 (lower alpha → closer to model0).
+
+---
+
+## CLI
+
+### Positional
+
+```
+mode model_path model_0 model_1
+```
+
+- `mode`: one of the codes above
+- `model_path`: directory containing the checkpoints
+- `model_0`: filename of the first model
+- `model_1`: filename of the second model (required for merging modes)
+- `--model_2`: filename of the third model (required by some modes, or when using `--cosine2`)
+
+### Options
+
+- Ratios:
+  - `--alpha <v>` / `--rand_alpha "<min,max[,seed][,elemental...]>"`
+  - `--beta  <v>` / `--rand_beta  "<min,max[,seed][,elemental...]>"`
+- Cosine structure (mutually exclusive):
+  - `--cosine0` | `--cosine1` | `--cosine2` (`--cosine2` requires `--model_2`)
+- Finetune:
+  - `--fine "<comma,separated,values>"`  
+    SDXL: classic pattern; Flux.1: pattern-based scaling for keys like `double_block`, `img_in`, `txt_in`, `time`, `out`, etc.
+- I/O & formats:
+  - `--vae <path>` bake into `first_stage_model.*`
+  - `--save_safetensors` (otherwise saves `.ckpt`)
+  - `--save_half` (fp16), `--save_quarter` (fp8, experimental)
+  - `--output <name>` output filename (no extension), `--force` to overwrite/autoname
+  - `--delete_source` delete source checkpoints after saving
+  - `--no_metadata` save without metadata
+- Pruning:
+  - `--prune` (optionally `--keep_ema` to keep EMA only)
+- Names:
+  - `--m0_name`, `--m1_name`, `--m2_name`
+- Device:
+  - `--device cpu|cuda:x` (default `cpu`)
+- DARE reproducibility:
+  - `--seed <int>`
+- Differences:
+  - `--use_dif_10`, `--use_dif_20`, `--use_dif_21` to reuse model diffs internally
+
+---
+
+## Usage Examples
+
+### 1) Simple weighted sum (2 models)
+```bash
+python merge.py WS models "A.safetensors" "B.safetensors"   --alpha 0.45 --output merged_ws --save_safetensors --save_half
+```
+
+### 2) Cosine structure: keep model1’s structure, inject model0 details
+```bash
+python merge.py WS models "A.safetensors" "B.safetensors"   --cosine1 --alpha 0.35 --output merged_cos1
+```
+
+### 3) Cosine2 (3 models): keep model2’s structure; inject 0 then 1 with α/β
+```bash
+python merge.py WS models "A.safetensors" "B.safetensors" --model_2 "C.safetensors"   --cosine2 --alpha 0.25 --beta 0.15 --output merged_cos2
+```
+
+### 4) Sparse Top-k delta (current build marks it as needs model_2)
+```bash
+python merge.py SPRSE models "A.safetensors" "B.safetensors" --model_2 "C.safetensors"   --alpha 0.5 --output merged_sparse
+```
+
+### 5) Frequency-band blend (Conv kernels; marked as needs model_2)
+```bash
+python merge.py FREQ models "A.safetensors" "B.safetensors" --model_2 "C.safetensors"   --alpha 0.4 --output merged_freq
+```
+
+### 6) No interpolation + finetune only (e.g., Flux.1 quick tweak)
+```bash
+python merge.py NoIn models "FluxModel.safetensors" "dummy.safetensors"   --fine "2,0,1,0,0,5" --output flux_finetuned
+```
+
+### 7) Read metadata only
+```bash
+python merge.py RM models "A.safetensors" "dummy.safetensors" --output meta_dump
+```
+
+---
+
+## VAE, Pruning & DTypes
+
+- **VAE bake:** `--vae path/to/vae.safetensors` replaces `first_stage_model.*`
+- **Pruning:** `--prune` (with `--keep_ema`) to slim the checkpoint; architecture-aware
+- **DTypes:** `--save_half` (fp16) is widely supported; `--save_quarter` (fp8) is experimental
+
+---
+
+## Output & Metadata
+
+- **`.safetensors`** (recommended) with metadata (unless `--no_metadata`), or **`.ckpt`** (`{"state_dict": ...}`)
+- Metadata includes:
+  - SHA256s, legacy hashes
+  - `sd_merge_recipe` (method, α/β info, fp, VAE, pruning flags, etc.)
+  - `sd_merge_models` (per-model provenance)
+
+---
+
+## Colab Quickstart
+
+```bash
+pip install torch safetensors
+
+git clone https://github.com/Faildes/merge-models
+cd merge-models
+
+python merge.py WS models "A.safetensors" "B.safetensors" --alpha 0.45 --output merged
+```
+
+> Depending on your environment, you may need `python3`, `py`, or `conda run -n <env> python`.
+
+---
+
+## Troubleshooting
+
+- **Cosine switches are exclusive:** use one of `--cosine0/1/2`.  
+- **3-model requirements:** `AD`, `sAD`, `MD`, `SIM`, `TD`, `TRS`, `ST` (and in this build: `SPRSE`, `CHAN`, `FREQ`) require `--model_2`.  
+- **Low VRAM:** stick to `--device cpu` (default). GPU merging needs VRAM ≈ model sizes (safetensors) or ~1.15× (ckpt).  
+- **XL block weights:** 25-length auto-converted; 19-length supported.  
+- **FREQ mode:** applies only to Conv tensors with kernel ≥ 3×3; others fall back to simple blending.  
+- **Flux finetune:** If some keys don’t react, extend the key substrings (`double_block`, `img_in`, `txt_in`, `time`, `out`, etc.) to match your checkpoint.
+
+---
 
 ## Credits
 
-- [AUTOMATIC1111](https://github.com/AUTOMATIC1111/stable-diffusion-webui) for overall designing.
-- [eyriewow](https://github.com/eyriewow/merge-models) for original merge-models.
-- [lopho](https://github.com/lopho/stable-diffusion-prune) and [arenasys](https://github.com/arenasys/stable-diffusion-webui-model-toolkit) for Pruning system.
-- [idelairre](https://github.com/idelairre/sd-merge-models) for Geometric, Sigmoid and Max Sum.
-- [s1dlx](https://github.com/s1dlx/meh) for Multiply Difference and Similarity Add Difference.
-- [hako-mikan](https://github.com/hako-mikan/sd-webui-supermerger) for Tensor Sum, Train Difference, Triple Sum, Sum twice, Smooth Add Difference, Finetuning, Cosine Merging and Elemental Merge.
-- [bbc-mc](https://github.com/bbc-mc/sdweb-merge-block-weighted-gui) for Block Weighted Merge.
-- [martyn](https://github.com/martyn/safetensors-merge-supermario) for DARE Merge.
-- Eyriewow got the merging logic in `merge.py` from [this post](https://discord.com/channels/1010980909568245801/1011008178957320282/1018117933894996038) by r_Sh4d0w, who seems to have gotten it from [mlfoundations/wise-ft](https://github.com/mlfoundations/wise-ft)
+- [AUTOMATIC1111](https://github.com/AUTOMATIC1111/stable-diffusion-webui) — overall design inspiration  
+- [eyriewow](https://github.com/eyriewow/merge-models) — original merge-models  
+- [lopho](https://github.com/lopho/stable-diffusion-prune), [arenasys](https://github.com/arenasys/stable-diffusion-webui-model-toolkit) — pruning  
+- [idelairre](https://github.com/idelairre/sd-merge-models) — Geometric / Sigmoid / Max  
+- [s1dlx](https://github.com/s1dlx/meh) — Multiply Difference / Similarity Add Difference  
+- [hako-mikan](https://github.com/hako-mikan/sd-webui-supermerger) — Tensor Sum / Train Difference / Triple Sum / Sum Twice / Smooth Add Difference / Finetune / Cosine / Elemental  
+- [bbc-mc](https://github.com/bbc-mc/sdweb-merge-block-weighted-gui) — Block Weighted Merge  
+- [martyn](https://github.com/martyn/safetensors-merge-supermario) — DARE  
+- wise-ft origin discussion via r_Sh4d0w → [mlfoundations/wise-ft](https://github.com/mlfoundations/wise-ft)

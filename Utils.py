@@ -185,7 +185,17 @@ def colorcalc(cols, isxl):
     M = COLSXL if isxl else COLS
     return [0.02 * sum(v * cols[i] for i, v in enumerate(col)) for col in zip(*M)]
 
-def fineman(fine, isxl):
+def fineman(fine, isxl=False, isflux=False):
+    if isflux:
+        mul = {
+            "double_block": 1.0 + (fine[0] * 0.01) if len(fine) > 0 else 1.0,
+            "img_in":       1.0 + (fine[1] * 0.01) if len(fine) > 1 else 1.0,
+            "txt_in":       1.0 + (fine[2] * 0.01) if len(fine) > 2 else 1.0,
+            "time":         1.0 + (fine[3] * 0.01) if len(fine) > 3 else 1.0,
+            "out":          1.0 + (fine[4] * 0.01) if len(fine) > 4 else 1.0,
+        }
+        add = (fine[5] * 0.02) if len(fine) > 5 else 0.0
+        return {"mul": mul, "add": add}
     r = [
         1 - fine[0] * 0.01,
         1 + fine[0] * 0.02,
@@ -407,6 +417,11 @@ def to_qdtype(sd1, sd2, qd1, qd2, device):
 
 def maybe_to_qdtype(a, b, qa, qb, device, isflux):
     return to_qdtype(a, b, qa, qb, device) if isflux and qa != qb else (a, b)
+
+def detect_arch(theta):
+    isxl = "conditioner.embedders.1.model.transformer.resblocks.9.mlp.c_proj.weight" in theta
+    isflux = any("double_block" in k for k in theta.keys())
+    return isxl, isflux
 
 def q_dequantize(sd, qtype, device, dtype, setbnb=True):
     from bitsandbytes.functional import dequantize_4bit
