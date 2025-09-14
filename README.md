@@ -28,7 +28,7 @@ Supports **`.ckpt`** and **`.safetensors`**. Runs on **CPU by default** (GPU opt
 
 Pick one `mode` (first positional arg). Some require a third model or `beta`.
 
-| Code   | Name                         | Needs model_2 | Needs `beta` | Notes |
+| Code   | Name                         | Needs 3rd model | Needs `beta` | Notes |
 |-------:|------------------------------|:-------------:|:------------:|------|
 | `WS`   | Weighted Sum                 |       ✗       |      ✗       | Standard linear mix |
 | `SIG`  | Sigmoid                      |       ✗       |      ✗       | Smooth non-linear |
@@ -46,12 +46,10 @@ Pick one `mode` (first positional arg). Some require a third model or `beta`.
 | `RM`   | Read Metadata                |       ✗       |      ✗       | Prints SHA256 + metadata and exits |
 | `DARE` | DARE                         |       ✗       |      ✓       | Stochastic delta resampling |
 | `ORTHO`| Orthogonalized Delta         |       ✗       |      ✗       | Apply diff orthogonal to base |
-| `SPRSE`| Sparse Top-k Delta           |   **✓**\*    |      ✗       | Applies largest diffs (uses α) |
+| `SPRSE`| Sparse Top-k Delta           |   ✓    |      ✗       | Applies largest diffs (uses α) |
 | `NORM` | Norm/Direction Split         |       ✗       |      ✗       | Blend magnitude & direction separately |
-| `CHAN` | Channel-wise Cosine Gate     |   **✓**\*    |      ✗       | Gate per output channel (Conv/Linear) |
-| `FREQ` | Frequency-Band Blend         |   **✓**\*    |      ✗       | Low/high-freq mix for Conv kernels |
-
-\* In the current code, `SPRSE`, `CHAN`, and `FREQ` are marked as “needs model_2”.
+| `CHAN` | Channel-wise Cosine Gate     |   ✓    |      ✗       | Gate per output channel (Conv/Linear) |
+| `FREQ` | Frequency-Band Blend         |   ✓    |      ✗       | Low/high-freq mix for Conv kernels |
 
 ---
 

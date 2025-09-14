@@ -236,18 +236,26 @@ def to_half_k(sd, enable):
 
 cache_filename = os.path.join(os.getcwd(), "cache.json")
 
+def _safe_load_json(path: str):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+    except json.JSONDecodeError:
+        return {}
+
 def merge_cache_json(model_path):
-    if not os.path.exists(cache_filename):
-        open(cache_filename, 'w').write('')
-    with open(cache_filename, "r", encoding="utf-8") as f:
-        base = json.load(f)
-    if os.path.exists(os.path.join(model_path,"cache.json")):
-        with open(os.path.join(model_path,"cache.json"), "r", encoding="utf-8") as f:
-            update = json.load(f)
-        if isinstance(base, dict) and isinstance(update, dict):
-            base.update(update)
-        elif isinstance(base, list) and isinstance(update, list):
-            base.extend(update)
+    base = _safe_load_json(cache_filename)
+    model_cache_path = os.path.join(model_path, "cache.json")
+    update = _safe_load_json(model_cache_path) if os.path.exists(model_cache_path) else {}
+
+    if isinstance(base, dict) and isinstance(update, dict):
+        base.update(update)
+    elif isinstance(base, list) and isinstance(update, list):
+        base.extend(update)
+
+    with filelock.FileLock(f"{cache_filename}.lock"):
         with open(cache_filename, "w", encoding="utf-8") as f:
             json.dump(base, f, ensure_ascii=False, indent=2)
     
@@ -259,13 +267,10 @@ def dump_cache(cache_data):
 def cache(subsection, cache_data):
     if cache_data is None:
         with filelock.FileLock(f"{cache_filename}.lock"):
-            try:
-                with open(cache_filename, encoding="utf8") as f:
-                    cache_data = json.load(f)
-            except FileNotFoundError:
-                cache_data = {}
-    cache_data.setdefault(subsection, {})
-    dump_cache(cache_data)
+            cache_data = _safe_load_json(cache_filename)
+    if subsection not in cache_data or not isinstance(cache_data.get(subsection), dict):
+        cache_data[subsection] = {}
+        dump_cache(cache_data)
     return cache_data
 
 def model_hash(filename: str) -> str:
@@ -277,9 +282,11 @@ def model_hash(filename: str) -> str:
         return "NOFILE"
 
 def sha256_from_cache(filename: str, title: str, cache_data):
-    hashes = cache("hashes", cache_data)
-    h = hashes["hashes"].get(title)
-    if not h: return None, None, None
+    cache_data = cache("hashes", cache_data)
+    hsect = cache_data.get("hashes", {})
+    h = hsect.get(title)
+    if not h:
+        return None, None, cache_data
     return h.get("sha256"), h.get("model_hash"), cache_data
 
 def calculate_sha256(filename: str, chunk_size: int = 4 * 1024 * 1024, max_workers: int = os.cpu_count() or 4) -> str:
@@ -299,27 +306,31 @@ def calculate_sha256(filename: str, chunk_size: int = 4 * 1024 * 1024, max_worke
             hasher.update(futures[i].result())
     return hasher.hexdigest()
 
-def sha256(filename: str, title: str, cache_data) -> str:
-    cached = sha256_from_cache(filename, title, cache_data)[0]
-    if cached:
-        return cached
+def sha256(filename: str, title: str, cache_data=None) -> str:
+    s256_cached, _, cache_data = sha256_from_cache(filename, title, cache_data)
+    if s256_cached:
+        return s256_cached
 
     print(f"Calculating sha256 for {filename}: ", end="")
     sha_val = calculate_sha256(filename)
     mhash = model_hash(filename)
     print(sha_val)
 
-    hashes = cache("hashes", cache_data)
-    hashes[title] = {
-        "mtime": os.path.getmtime(filename),
+    cache_data = cache("hashes", cache_data)
+    if "hashes" not in cache_data or not isinstance(cache_data["hashes"], dict):
+        cache_data["hashes"] = {}
+
+    cache_data["hashes"][title] = {
+        "mtime": os.path.getmtime(filename) if os.path.exists(filename) else None,
         "sha256": sha_val,
         "model_hash": mhash,
     }
-    dump_cache(hashes)
+    dump_cache(cache_data)
     return sha_val
 
 def calculate_shorthash(filename: str):
-    val = sha256(filename, f"checkpoint/{os.path.splitext(os.path.basename(filename))[0]}")
+    title = f"checkpoint/{os.path.splitext(os.path.basename(filename))[0]}"
+    val = sha256(filename, title, None)
     return None if val is None else val[:10]
 
 def read_metadata_from_safetensors(filename):
@@ -392,10 +403,9 @@ def load_model(path: str, device, cache_data = None, verify_hash: bool = True):
     if verify_hash:
         title = f"checkpoint/{Path(path).stem}"
         s256, hashed, cache_data = sha256_from_cache(path, title, cache_data)
-        if not (s256 or hashed or cache_data):
+        if not (s256 or hashed):
             sha256(path, title, cache_data)
             s256, hashed, cache_data = sha256_from_cache(path, title, cache_data)
-            
 
     weights = get_state_dict_from_checkpoint(weights)
     if not verify_hash:
@@ -531,7 +541,7 @@ def diff_inplace(dst, src, func, desc):
         dst[k] = func(dst[k], t2) if t2 is not None else torch.zeros_like(dst[k])
 
 def clone_dict_tensors(d):
-    return {k: v.clone() for k, v in d.items()}
+    return {k[0]: k[1].clone() for k in tqdm(list(d.items()), "Cloning dict...")}
 
 def np_trim_percentiles(arr, lo=1, hi=99):
     arr = arr[~np.isnan(arr)]

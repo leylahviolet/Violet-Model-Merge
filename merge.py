@@ -412,23 +412,23 @@ def _apply_cosine_blend(a, b, kmin, kmax, cur_alpha, variant):
     return b * (1 - k) + a * k
 
 def _finetune_inplace(key, tens, fine):
-    if not fine:
+    if "first_stage_model" in key or not fine:
         return tens
 
-    if isinstance(fine, dict) and isflux:
-        mul = fine.get("mul", {})
+    if isinstance(fine, dict):
+        mul = fine.get("mul", {}) or {}
         m = 1.0
 
         if any(s in key for s in ("double_block", "double_blocks", "db.")):
-            m *= mul.get("double_block", 1.0)
+            m *= float(mul.get("double_block", 1.0))
         if any(s in key for s in (".img_in", "image_in", "image_proj")):
-            m *= mul.get("img_in", 1.0)
+            m *= float(mul.get("img_in", 1.0))
         if any(s in key for s in (".txt_in", "context_in", "text_in", "clip_proj")):
-            m *= mul.get("txt_in", 1.0)
+            m *= float(mul.get("txt_in", 1.0))
         if any(s in key for s in ("time_in", "time_embed", "timestep", "vector_in")):
-            m *= mul.get("time", 1.0)
+            m *= float(mul.get("time", 1.0))
         if any(s in key for s in (".out.", "final_layer", "vector_out")) or key.endswith(".out"):
-            m *= mul.get("out", 1.0)
+            m *= float(mul.get("out", 1.0))
 
         if m != 1.0:
             tens = tens * torch.as_tensor(m, device=tens.device, dtype=tens.dtype)
@@ -447,18 +447,19 @@ def _finetune_inplace(key, tens, fine):
         if idx < 5:
             return tens * torch.as_tensor(fine[idx], device=tens.device, dtype=tens.dtype)
         else:
-            f5 = fine[5]
-            if isinstance(f5, (list, tuple)) and len(f5) > 0:
-                bias = float(f5[0])
-            elif isinstance(f5, (int, float)):
-                bias = float(f5)
-            else:
-                bias = 0.0
-            if bias:
-                return tens + torch.as_tensor(bias, device=tens.device, dtype=tens.dtype)
-            return tens
-
+            try:
+                add = torch.as_tensor(fine[5], device=tens.device, dtype=tens.dtype)
+                return tens + add
+            except Exception:
+                if isinstance(fine[5], (list, tuple)) and len(fine[5]) > 0:
+                    add = torch.as_tensor(fine[5][0], device=tens.device, dtype=tens.dtype)
+                    return tens + add
+                else:
+                    add = torch.as_tensor(float(fine[5]) if fine[5] is not None else 0.0,
+                                          device=tens.device, dtype=tens.dtype)
+                    return tens + add
     return tens
+
 
 use_cos0 = bool(args.cosine0)
 use_cos1 = bool(args.cosine1)
@@ -500,7 +501,7 @@ if use_cos0 or use_cos1 or use_cos2:
         if dB is not None and (key in dB) and (cur_b is not None):
             out = _apply_cosine_blend(out, dB[key], kminB, kmaxB, cur_b, variant=varB)
 
-        out = _finetune_inplace(key, out)
+        out = _finetune_inplace(key, out, fine)
         theta_res[key] = out
 
     theta_0 = theta_res
@@ -534,7 +535,7 @@ if mode != "NoIn":
             bf = b.detach().float()
             filt = scipy.ndimage.gaussian_filter(bf.cpu().numpy(), sigma=1)
             theta_0[key] = a + cur_a * torch.from_numpy(filt).to(a.device, dtype=a.dtype)
-            theta_0[key] = _finetune_inplace(key, theta_0[key]); continue
+            theta_0[key] = _finetune_inplace(key, theta_0[key], fine); continue
 
         if mode == "TD":
             t1 = theta_1[key].float()
@@ -550,7 +551,7 @@ if mode != "NoIn":
             scale = torch.where(denom != 0, dist_A0 / denom, torch.tensor(0., device=t0.device))
             scale = torch.sign(t1 - t2) * scale.abs()
             theta_0[key] = (t0 + (scale * diff_AB) * (cur_a * 1.8)).to(theta_0[key].dtype)
-            theta_0[key] = _finetune_inplace(key, theta_0[key]); continue
+            theta_0[key] = _finetune_inplace(key, theta_0[key], fine); continue
 
         if mode == "TS":
             if a.dim() == 0:
@@ -564,7 +565,7 @@ if mode != "NoIn":
                 t = b.clone()
                 t[s:e, ...] = a[s:e, ...].clone()
                 theta_0[key] = t
-            theta_0[key] = _finetune_inplace(key, theta_0[key])
+            theta_0[key] = _finetune_inplace(key, theta_0[key], fine)
             continue
 
         if al != bl and len(al) == 4 and len(bl) == 4 and al[0]==bl[0] and al[2:]==bl[2:]:
@@ -581,7 +582,7 @@ if mode != "NoIn":
         else:
             theta_0[key] = theta_func2(ad, b, cur_a)
 
-        theta_0[key] = _finetune_inplace(key, theta_0[key])
+        theta_0[key] = _finetune_inplace(key, theta_0[key], fine)
 
     if mode != "DARE":
         for key in tqdm(theta_1.keys(), desc="Remerging..."):
