@@ -199,8 +199,9 @@ for flag, helpmsg in {
 }.items():
     parser.add_argument(f"--{flag}", action="store_true", help=helpmsg, required=False)
 
-parser.add_argument("--seed",   type=int,   default=None, help="Random seed for stochastic modes (e.g., DARE)")
+parser.add_argument("--seed",   type=int,   help="Random seed for stochastic modes (e.g., DARE)", default=None)
 parser.add_argument("--vae",    type=str,   help="Path of VAE", default=None, required=False)
+parser.add_argument("--memo",   type=str,   help="Additional info bake in metadata", default=None)
 parser.add_argument("--fine",   type=str,   help="Finetune the given keys on model 0", default=None, required=False)
 parser.add_argument("--output",             help="Output file name without extension", default="merged", required=False)
 parser.add_argument("--device", type=str,   help="Device to use, defaults to cpu", default="cpu", required=False)
@@ -646,7 +647,9 @@ if args.prune:
 for k in tqdm(list(theta_0.keys()), desc="Check contiguous..."):
     theta_0[k] = theta_0[k].contiguous()
 
-metadata = {"format": "pt", "sd_merge_models": {}, "sd_merge_recipe": None}
+metadata = {"format": "safetensors" if args.save_safetensors else "ckpt", "sd_merge_models": {}, "sd_merge_recipe": None}
+if args.memo is not None:
+    metadata["memo"] = args.memo
 
 calcs = [
     name for flag, name in [

@@ -15,8 +15,7 @@ from Utils import (
     LBLOCKS26,
     BLOCKID,
     cache,
-    dump_cache,
-    merge_cache_json
+    dump_cache
 )
 
 _re_digits = re.compile(r"\d+")
@@ -319,10 +318,12 @@ def darelora(mainlora, lora_list, model, output, model_path, device="cpu"):
         "checkpoint": json.dumps(read_metadata_from_safetensors(mpath)) if mpath.endswith(".safetensors") else "{}",
         "lora": json.dumps(lora_meta),
     }
+    if args.memo is not None:
+        meta_new["memo"] = args.memo
 
     print(f"Saving as {output}...")
     if output.endswith(".safetensors"):
-        safetensors.torch.save_file(theta_0, output, metadata=meta_new)
+        safetensors.torch.save_file(theta_0, output, metadata=None if args.no_metadata else meta_new)
     else:
         torch.save({"state_dict": theta_0}, output)
 
@@ -340,11 +341,12 @@ if __name__ == "__main__":
     parser.add_argument("--save_quarter", action="store_true", help="Save as float8", required=False)
     parser.add_argument("--keep_ema", action="store_true", help="Keep ema", required=False)
     parser.add_argument("--dare", action="store_true", help="Use DARE Merge")
+    parser.add_argument("--no_metadata", action="store_true", help="Save without metadata")
+    parser.add_argument("--memo",   type=str,   help="Additional info bake in metadata", default=None)
     parser.add_argument("--save_safetensors", action="store_true", help="Save as .safetensors", required=False)
     parser.add_argument("--output", type=str, help="Output file name, without extension", default="merged", required=False)
     parser.add_argument("--device", type=str, help="Device to use, defaults to cpu", default="cpu", required=False)
     args = parser.parse_args()
-    merge_cache_json(args.model_path)
 
     ll  = get_loralist(args.loras)
     out = os.path.join(args.model_path, f"{args.output}.{'safetensors' if args.save_safetensors else 'ckpt'}")
