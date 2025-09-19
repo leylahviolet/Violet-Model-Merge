@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 💜 Coming Soon
+- Additional merge algorithms and techniques
+- Enhanced performance optimizations
+
+---
+
+## [1.2.0] - 2025-09-19
+
 ### 💜 Added
 
 - **Project Rebrand**: Now known as **Violet Model Merge**
@@ -29,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated all documentation to reflect new project structure
 
 ### 🛡️ Fixed
+- Corrupted emoji characters in notebook table of contents causing markdown rendering issues
 - Unicode decoding issues during subprocess execution
 - CUDA compatibility with proper PyTorch installation detection
 - Import path resolution for reorganized modules

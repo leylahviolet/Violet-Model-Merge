@@ -408,13 +408,13 @@ def create_argument_parser() -> argparse.ArgumentParser:
         epilog="""
 ✨ Examples:
   Basic weighted merge:
-    python merge.py WS models model_a.safetensors model_b.safetensors --alpha 0.3
+    python merge_model.py WS models model_a.safetensors model_b.safetensors --alpha 0.3
     
   Add difference with structure preservation:
-    python merge.py AD models base.safetensors style.safetensors --model_2 detail.safetensors --cosine0
+    python merge_model.py AD models base.safetensors style.safetensors --model_2 detail.safetensors --cosine0
     
   Advanced DARE merge:
-    python merge.py DARE models a.safetensors b.safetensors --alpha 0.5 --beta 0.3 --seed 42
+    python merge_model.py DARE models a.safetensors b.safetensors --alpha 0.5 --beta 0.3 --seed 42
         """
     )
     

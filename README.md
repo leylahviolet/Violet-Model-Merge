@@ -4,7 +4,7 @@
 >
 > *Derived from [Chattiori Model Merger](https://github.com/faildes) by Chattiori*
 
-[![Version](https://img.shields.io/badge/version-1.0.0-8A2BE2?style=for-the-badge&logoColor=white)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.2.0-8A2BE2?style=for-the-badge&logoColor=white)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://python.org)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-red.svg)](https://pytorch.org)
 [![CUDA](https://img.shields.io/badge/CUDA-Optional-green.svg)](https://developer.nvidia.com/cuda-zone)
@@ -57,14 +57,14 @@ pip install -r requirements.txt
 Perfect for AI artists who want a guided, visual experience:
 
 ```bash
-jupyter lab merge_runner.ipynb
+jupyter lab violet_merge.ipynb
 ```
 
 #### ⚡ **[Command Line Interface](#-command-line-usage)**
 For advanced users who prefer terminal workflows:
 
 ```bash
-python lib/merge.py WS models "model_a.safetensors" "model_b.safetensors" --alpha 0.4
+python lib/merge_model.py WS models "model_a.safetensors" "model_b.safetensors" --alpha 0.4
 ```
 
 ---
@@ -92,9 +92,9 @@ pip install -r requirements.txt
 
 ```
 Violet-Model-Merge/
-├── 📒 merge_runner.ipynb          # Main interactive notebook
+├── 📒 violet_merge.ipynb          # Main interactive notebook
 ├── 📁 lib/                        # Core Python modules
-│   ├── merge.py                   # Main merging engine
+│   ├── merge_model.py             # Main merging engine
 │   ├── utils.py                   # Utility functions
 │   └── lora_bake.py              # LoRA integration
 ├── 📁 models/                     # Your model files (.safetensors, .ckpt)
@@ -114,7 +114,7 @@ The **interactive notebook** provides the best experience for AI artists with gu
 
 1. **Launch Jupyter Lab**:
    ```bash
-   jupyter lab merge_runner.ipynb
+   jupyter lab violet_merge.ipynb
    ```
 
 2. **Configure Your Paths** (First cell):
@@ -187,32 +187,32 @@ For advanced users who prefer terminal workflows and automation scripts.
 ### Basic Syntax
 
 ```bash
-python lib/merge.py <MODE> <model_path> <model_0> <model_1> [OPTIONS]
+python lib/merge_model.py <MODE> <model_path> <model_0> <model_1> [OPTIONS]
 ```
 
 ### Quick Examples
 
 #### **Simple Weighted Merge**
 ```bash
-python lib/merge.py WS models "A.safetensors" "B.safetensors" \
+python lib/merge_model.py WS models "A.safetensors" "B.safetensors" \
   --alpha 0.45 --output merged_ws --save_safetensors --save_half
 ```
 
 #### **Cosine Structure Merge**
 ```bash
-python lib/merge.py WS models "A.safetensors" "B.safetensors" \
+python lib/merge_model.py WS models "A.safetensors" "B.safetensors" \
   --cosine1 --alpha 0.35 --output merged_cos1
 ```
 
 #### **3-Model Advanced Merge**
 ```bash
-python lib/merge.py AD models "A.safetensors" "B.safetensors" \
+python lib/merge_model.py AD models "A.safetensors" "B.safetensors" \
   --model_2 "C.safetensors" --alpha 0.25 --beta 0.15 --output merged_blend
 ```
 
 #### **GPU-Accelerated with VAE**
 ```bash
-python lib/merge.py SIG models "base.safetensors" "style.safetensors" \
+python lib/merge_model.py SIG models "base.safetensors" "style.safetensors" \
   --alpha 0.4 --vae "vae.pt" --device cuda --output gpu_blend
 ```
 
@@ -220,25 +220,25 @@ python lib/merge.py SIG models "base.safetensors" "style.safetensors" \
 
 #### **Experimental DARE Merge**
 ```bash
-python lib/merge.py DARE models "A.safetensors" "B.safetensors" \
+python lib/merge_model.py DARE models "A.safetensors" "B.safetensors" \
   --alpha 0.4 --beta 0.3 --seed 42 --output dare_experiment
 ```
 
 #### **Frequency-Band Blending**
 ```bash
-python lib/merge.py FREQ models "A.safetensors" "B.safetensors" \
+python lib/merge_model.py FREQ models "A.safetensors" "B.safetensors" \
   --model_2 "C.safetensors" --alpha 0.4 --output freq_blend
 ```
 
 #### **No Interpolation + Finetuning**
 ```bash
-python lib/merge.py NoIn models "FluxModel.safetensors" "dummy.safetensors" \
+python lib/merge_model.py NoIn models "FluxModel.safetensors" "dummy.safetensors" \
   --fine "2,0,1,0,0,5" --output flux_finetuned
 ```
 
 #### **Metadata Reading**
 ```bash
-python lib/merge.py RM models "A.safetensors" "dummy.safetensors" --output meta_dump
+python lib/merge_model.py RM models "A.safetensors" "dummy.safetensors" --output meta_dump
 ```
 
 ---
