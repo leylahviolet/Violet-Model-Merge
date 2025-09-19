@@ -11,6 +11,10 @@ import safetensors.torch
 import safetensors
 from tqdm.auto import tqdm
 
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 from Utils import wgt, rand_ratio, sha256, read_metadata_from_safetensors \
     , load_model, parse_ratio, qdtyper, maybe_to_qdtype, np_trim_percentiles \
     , diff_inplace, clone_dict_tensors, fineman, weighttoxl, BLOCKID, BLOCKIDFLUX \

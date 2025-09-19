@@ -1,0 +1,181 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chattiori-model-merger"
+version = "1.0.0"
+description = "A sophisticated, artist-friendly model merging toolkit for Stable Diffusion and Flux.1"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Leylah Violet", email = "leylahviolet@example.com"},
+]
+maintainers = [
+    {name = "Leylah Violet", email = "leylahviolet@example.com"},
+]
+keywords = [
+    "stable-diffusion",
+    "flux",
+    "model-merging",
+    "ai-art",
+    "machine-learning",
+    "pytorch",
+    "safetensors",
+    "diffusion-models"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "Topic :: Artistic Software",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Multimedia :: Graphics",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "torch>=2.0.0",
+    "safetensors>=0.3.0",
+    "diffusers>=0.20.0",
+    "numpy>=1.21.0",
+    "scipy>=1.7.0",
+    "tqdm>=4.60.0",
+    "pytorch_lightning>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "jupyter>=1.0.0",
+    "jupyterlab>=3.0.0",
+    "black>=22.0.0",
+    "isort>=5.10.0",
+    "flake8>=4.0.0",
+    "mypy>=0.950",
+    "pytest>=7.0.0",
+    "pytest-cov>=3.0.0",
+]
+notebook = [
+    "jupyter>=1.0.0",
+    "jupyterlab>=3.0.0",
+    "ipywidgets>=7.6.0",
+    "matplotlib>=3.5.0",
+]
+lora = [
+    "lora>=0.1.0",
+    "bitsandbytes>=0.35.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/leylahviolet/Chattiori-Model-Merger"
+Repository = "https://github.com/leylahviolet/Chattiori-Model-Merger"
+Documentation = "https://github.com/leylahviolet/Chattiori-Model-Merger#readme"
+Issues = "https://github.com/leylahviolet/Chattiori-Model-Merger/issues"
+Changelog = "https://github.com/leylahviolet/Chattiori-Model-Merger/blob/main/CHANGELOG.md"
+"Original Project" = "https://github.com/Faildes/merge-models"
+
+[project.scripts]
+chattiori-merge = "lib.merge:main"
+
+[tool.setuptools]
+packages = ["lib"]
+include-package-data = true
+
+[tool.setuptools.package-data]
+"*" = ["*.md", "*.txt", "*.yml", "*.yaml", "*.json"]
+
+# Development Tools Configuration
+
+[tool.black]
+line-length = 88
+target-version = ['py38', 'py39', 'py310', 'py311', 'py312']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+  | venv
+)/
+'''
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+known_first_party = ["lib"]
+skip_glob = ["venv/*", ".venv/*"]
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = true
+disallow_untyped_decorators = false
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+    "torch.*",
+    "safetensors.*",
+    "diffusers.*",
+    "scipy.*",
+    "tqdm.*",
+    "pytorch_lightning.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--cov=lib",
+    "--cov-report=html",
+    "--cov-report=term-missing",
+    "--cov-fail-under=80",
+]
+
+[tool.coverage.run]
+source = ["lib"]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "*/__pycache__/*",
+    "*/venv/*",
+    "*/.venv/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "@abstract",
+]

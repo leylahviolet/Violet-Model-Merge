@@ -3,3 +3,7 @@ safetensors
 diffusers
 lora
 bitsandbytes
+numpy
+scipy
+tqdm
+pytorch_lightning
