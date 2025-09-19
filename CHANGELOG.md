@@ -1,4 +1,4 @@
-# 📋 Changelog
+# 💜 Violet Model Merge - Changelog
 
 All notable changes to this project will be documented in this file.
 
@@ -9,7 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### 🎨 Added
+### 💜 Added
+
+- **Project Rebrand**: Now known as **Violet Model Merge**
 - Interactive Jupyter notebook with comprehensive merge documentation
 - Artist-friendly interface with guided examples and explanations
 - Clean error handling with user-friendly progress reporting
@@ -41,10 +43,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.0.0] - Initial Fork
+## [1.0.0] - Initial Fork from Chattiori Model Merger
 
 ### 🎉 Initial Release
-- Forked from [Faildes/merge-models](https://github.com/Faildes/merge-models)
+
+- Forked from [Chattiori Model Merger](https://github.com/faildes) by Chattiori
 - Maintained all original merge algorithms and functionality
 - Added foundation for enhanced artist experience
 - Preserved compatibility with original CLI interface
@@ -53,9 +56,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## 🔗 Links
 
-- **Repository**: [leylahviolet/Chattiori-Model-Merger](https://github.com/leylahviolet/Chattiori-Model-Merger)
-- **Original Project**: [Faildes/merge-models](https://github.com/Faildes/merge-models)
-- **Issues**: [Report a Bug](https://github.com/leylahviolet/Chattiori-Model-Merger/issues)
+- **Repository**: [leylahviolet/Violet-Model-Merge](https://github.com/leylahviolet/Violet-Model-Merge)
+- **Original Project**: [Chattiori Model Merger](https://github.com/faildes) by Chattiori
+- **Issues**: [Report a Bug](https://github.com/leylahviolet/Violet-Model-Merge/issues)
 
 ---
 

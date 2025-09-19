@@ -1,12 +1,15 @@
-# 🎨 Chattiori Model Merger
+# 💜 Violet Model Merge
 
 > *A sophisticated, artist-friendly model merging toolkit for Stable Diffusion and Flux.1*
+>
+> *Derived from [Chattiori Model Merger](https://github.com/faildes) by Chattiori*
 
+[![Version](https://img.shields.io/badge/version-1.0.0-8A2BE2?style=for-the-badge&logoColor=white)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://python.org)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-red.svg)](https://pytorch.org)
 [![CUDA](https://img.shields.io/badge/CUDA-Optional-green.svg)](https://developer.nvidia.com/cuda-zone)
 
-**Chattiori Model Merger** is a fast, deterministic checkpoint merger for **Stable Diffusion** (SD1.x/2.x/XL) and **Flux.1** models. Built for AI artists who want precise control over model blending with an intuitive interface.
+**Violet Model Merge** is a fast, deterministic checkpoint merger for **Stable Diffusion** (SD1.x/2.x/XL) and **Flux.1** models. Built for AI artists who want precise control over model blending with an intuitive interface.
 
 ---
 
@@ -41,8 +44,8 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/leylahviolet/Chattiori-Model-Merger.git
-cd Chattiori-Model-Merger
+git clone https://github.com/leylahviolet/Violet-Model-Merge.git
+cd Violet-Model-Merge
 
 # Install dependencies
 pip install -r requirements.txt
@@ -50,7 +53,7 @@ pip install -r requirements.txt
 
 ### Choose Your Interface
 
-#### 🎨 **[Interactive Notebook](#-jupyter-notebook-usage-recommended) (Recommended)**
+#### 📓 **[Interactive Notebook](#-jupyter-notebook-usage-recommended) (Recommended)**
 Perfect for AI artists who want a guided, visual experience:
 
 ```bash
@@ -77,7 +80,6 @@ python lib/merge.py WS models "model_a.safetensors" "model_b.safetensors" --alph
 **Optional Enhancements:**
 - **CUDA** toolkit for GPU acceleration
 - **Jupyter Lab** for the interactive notebook experience
-- **scipy** for advanced mathematical operations
 
 **All dependencies are automatically installed via:**
 ```bash
@@ -89,14 +91,12 @@ pip install -r requirements.txt
 ## 📁 Project Structure
 
 ```
-Chattiori-Model-Merger/
+Violet-Model-Merge/
 ├── 📒 merge_runner.ipynb          # Main interactive notebook
 ├── 📁 lib/                        # Core Python modules
 │   ├── merge.py                   # Main merging engine
-│   ├── Utils.py                   # Utility functions
+│   ├── utils.py                   # Utility functions
 │   └── lora_bake.py              # LoRA integration
-├── 📁 reference/                  # Documentation and guides
-│   └── guide.md                  # Detailed merge method explanations
 ├── 📁 models/                     # Your model files (.safetensors, .ckpt)
 ├── 📁 vae/                        # VAE files for baking
 ├── 📄 pyproject.toml             # Modern Python packaging
@@ -314,9 +314,9 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history and updates.
 
 ## 🙏 Acknowledgments
 
-**Chattiori Model Merger** builds upon the incredible work of the open-source AI community. Special thanks to:
+The **Violet Model Merge** builds upon the incredible work of the open-source AI community. Special thanks to:
 
-### 💜 **[Faildes](https://github.com/faildes)** — Original Architect
+### 💜 **[Chattiori](https://github.com/faildes)** — Original Architect
 *The brilliant mind behind the core merging algorithms and mathematical foundations that make this tool possible*
 
 ### 🌟 **Core Contributors**
@@ -328,6 +328,7 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history and updates.
 - **[bbc-mc](https://github.com/bbc-mc/sdweb-merge-block-weighted-gui)** — Block-weighted merging interface
 - **[martyn](https://github.com/martyn/safetensors-merge-supermario)** — DARE algorithm implementation
 - **[mlfoundations/wise-ft](https://github.com/mlfoundations/wise-ft)** — Theoretical foundation for DARE method
+- **[LatteLeopard](https://civitai.com/user/LatteLeopard)** - Merge method descriptions
 
 This project stands on the shoulders of giants. 💜
 

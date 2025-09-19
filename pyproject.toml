@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "chattiori-model-merger"
+name = "violet-model-merge"
 version = "1.0.0"
-description = "A sophisticated, artist-friendly model merging toolkit for Stable Diffusion and Flux.1"
+description = "A sophisticated, artist-friendly model merging toolkit for Stable Diffusion and Flux.1 - derived from Chattiori Model Merger"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
@@ -46,7 +46,6 @@ dependencies = [
     "safetensors>=0.3.0",
     "diffusers>=0.20.0",
     "numpy>=1.21.0",
-    "scipy>=1.7.0",
     "tqdm>=4.60.0",
     "pytorch_lightning>=2.0.0",
 ]
@@ -74,15 +73,15 @@ lora = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/leylahviolet/Chattiori-Model-Merger"
-Repository = "https://github.com/leylahviolet/Chattiori-Model-Merger"
-Documentation = "https://github.com/leylahviolet/Chattiori-Model-Merger#readme"
-Issues = "https://github.com/leylahviolet/Chattiori-Model-Merger/issues"
-Changelog = "https://github.com/leylahviolet/Chattiori-Model-Merger/blob/main/CHANGELOG.md"
-"Original Project" = "https://github.com/Faildes/merge-models"
+Homepage = "https://github.com/leylahviolet/Violet-Model-Merge"
+Repository = "https://github.com/leylahviolet/Violet-Model-Merge"
+Documentation = "https://github.com/leylahviolet/Violet-Model-Merge#readme"
+Issues = "https://github.com/leylahviolet/Violet-Model-Merge/issues"
+Changelog = "https://github.com/leylahviolet/Violet-Model-Merge/blob/main/CHANGELOG.md"
+"Original Project" = "https://github.com/faildes"
 
 [project.scripts]
-chattiori-merge = "lib.merge:main"
+violet-merge = "lib.merge:main"
 
 [tool.setuptools]
 packages = ["lib"]
@@ -142,7 +141,6 @@ module = [
     "torch.*",
     "safetensors.*",
     "diffusers.*",
-    "scipy.*",
     "tqdm.*",
     "pytorch_lightning.*",
 ]
