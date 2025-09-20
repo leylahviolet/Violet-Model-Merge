@@ -15,6 +15,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.1] - 2025-09-20
+
+### 🛡️ Fixed
+
+- **Critical Algorithm Signature Fixes**: Resolved function signature mismatches in merge algorithms
+  - Fixed MD (Multiply Difference) `needs_model2` flag from False to True
+  - Fixed SIM (Similarity Add Difference) `needs_model2` flag from False to True  
+  - Fixed MAX (Maximum) function signature to include required alpha parameter
+  - Fixed DARE merge to properly handle optional generator parameter for reproducible results
+- **Execution Logic Updates**: Enhanced merge dispatch logic to handle all 3-model algorithms correctly
+  - Updated execution paths for MD, SIM, ST (Sum Twice), and TRS (Triple Sum)
+  - Added special case handling for DARE's generator parameter
+  - Improved algorithm categorization and parameter validation
+
+### 🔧 Changed
+
+- Enhanced notebook documentation for MD algorithm with clearer 3-model requirements
+- Improved algorithm signature consistency across all merge methods
+
+---
+
 ## [1.3.0] - 2025-09-20
 
 ### ✨ Added

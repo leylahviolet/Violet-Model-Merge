@@ -4,7 +4,7 @@
 >
 > *Derived from [Chattiori Model Merger](https://github.com/faildes) by Chattiori*
 
-[![Version](https://img.shields.io/badge/version-1.3.0-8A2BE2?style=for-the-badge&logoColor=white)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.3.1-8A2BE2?style=for-the-badge&logoColor=white)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://python.org)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-red.svg)](https://pytorch.org)
 [![CUDA](https://img.shields.io/badge/CUDA-Optional-green.svg)](https://developer.nvidia.com/cuda-zone)

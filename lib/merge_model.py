@@ -46,8 +46,8 @@ class MergeMode(Enum):
     AD = ("Add Difference", True, False)
     RM = ("Read Metadata", False, False)
     SAD = ("Smooth Add Difference", True, False)
-    MD = ("Multiply Difference", False, True)
-    SIM = ("Similarity Add Difference", False, True)
+    MD = ("Multiply Difference", True, True)
+    SIM = ("Similarity Add Difference", True, True)
     TD = ("Training Difference", True, False)
     TS = ("Tensor Sum", False, True)
     TRS = ("Triple Sum", True, True)
@@ -360,8 +360,8 @@ class MergeAlgorithms:
         return (a + alpha * (b - a) * mask).to(a.dtype)
     
     @staticmethod
-    def weight_max(theta0: torch.Tensor, theta1: torch.Tensor) -> torch.Tensor:
-        """Element-wise maximum between tensors."""
+    def weight_max(theta0: torch.Tensor, theta1: torch.Tensor, alpha: float) -> torch.Tensor:
+        """Element-wise maximum between tensors. Alpha is ignored for MAX operation."""
         return torch.max(theta0, theta1)
     
     @staticmethod
@@ -799,12 +799,15 @@ class ModelMerger:
             layer_alpha = self._resolve_layer_weight(key, alpha, models)
             layer_beta = self._resolve_layer_weight(key, beta, models) if self.config.mode.needs_beta else None
             
-            # Apply merge algorithm
-            if self.config.mode in [MergeMode.AD, MergeMode.SAD, MergeMode.MD] and theta_2 is not None and layer_beta is not None:
-                # 3-model merge (AD, SAD, MD)
+            # Apply merge algorithm  
+            if self.config.mode in [MergeMode.AD, MergeMode.SAD, MergeMode.MD, MergeMode.SIM, MergeMode.ST, MergeMode.TRS] and theta_2 is not None and layer_beta is not None:
+                # 3-model merge (AD, SAD, MD, SIM, ST, TRS)
                 theta_0[key] = merge_func(a, b, theta_2[key], layer_alpha, layer_beta)
+            elif self.config.mode == MergeMode.DARE and layer_beta is not None:
+                # DARE merge with generator parameter
+                theta_0[key] = merge_func(a, b, layer_alpha, layer_beta, self.generator)
             elif self.config.mode.needs_beta and layer_beta is not None:
-                # 2-model merge with beta (DARE, etc.)
+                # 2-model merge with beta (other algorithms)
                 theta_0[key] = merge_func(a, b, layer_alpha, layer_beta)
             else:
                 # Standard 2-model merge
