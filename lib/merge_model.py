@@ -992,7 +992,11 @@ class ModelMerger:
                     "legacy_hash": models[hash_key],
                     "sd_merge_recipe": models[meta_key].get("sd_merge_recipe"),
                 }
-                metadata["sd_merge_models"].update(models[meta_key].get("sd_merge_models", {}))
+                merge_models_val = models[meta_key].get("sd_merge_models", {})
+                if isinstance(merge_models_val, dict):
+                    metadata["sd_merge_models"].update(merge_models_val)
+                else:
+                    print(f"[WARN] Model {meta_key} has non-dict sd_merge_models metadata: {type(merge_models_val)}. Skipping merge of this field.")
         
         add_model_info("0")
         if self.config.mode != MergeMode.NOIN:
