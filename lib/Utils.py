@@ -658,8 +658,26 @@ def sha256(filename: str, title: str, cache_data=None) -> str:
     return hash_value
 
 def load_model(path: str, device: str = "cpu", cache_data=None, verify_hash: bool = True):
-    """Legacy wrapper for model loading."""
-    return _model_loader.load_model(path, device, verify_hash)
+    """Legacy wrapper for model loading - returns (theta, sha256, hash, meta, cache_data)."""
+    
+    # Load the model state dict
+    theta = _model_loader.load_model(path, device, verify_hash)
+    
+    # Calculate hashes
+    sha256_hash = HashingUtils.calculate_sha256(path)
+    short_hash = HashingUtils.calculate_short_hash(path)
+    
+    # Read metadata
+    try:
+        meta = read_metadata_from_safetensors(path)
+    except Exception:
+        meta = {}
+    
+    # Handle cache data
+    if cache_data is None:
+        cache_data = {}
+    
+    return theta, sha256_hash, short_hash, meta, cache_data
 
 def read_metadata_from_safetensors(filename):
     """Legacy wrapper for metadata reading."""

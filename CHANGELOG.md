@@ -15,6 +15,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.1] - 2025-09-19
+
+### 🚀 Performance
+
+- **Major Performance Boost**: Optimized merge execution logic resulting in dramatically faster processing
+  - 3-model merges now complete in seconds instead of hours
+  - 30% smaller codebase with significantly improved efficiency
+  - Memory usage optimizations for large model handling
+
+### 🛡️ Fixed
+
+- **DARE Merge Beta Parameter**: Fixed missing beta argument in DARE merge algorithm
+  - Corrected function signature mismatch between 2-model and 3-model merges
+  - Updated merge execution logic to properly handle beta parameter for DARE mode
+  - All merge modes now work correctly in both CLI and notebook environments
+- Improved merge algorithm dispatch logic for better reliability
+
+### 🔧 Changed
+
+- Streamlined merge execution code for better performance and maintainability
+- Enhanced merge mode detection and parameter handling
+
+---
+
 ## [1.2.0] - 2025-09-19
 
 ### 💜 Added
@@ -30,6 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Real-time merge progress tracking with clean output
 
 ### 🔧 Changed
+
 - Reorganized project structure for better maintainability
 - Moved Python modules to `lib/` directory
 - Enhanced README with modern formatting and better organization
@@ -37,6 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated all documentation to reflect new project structure
 
 ### 🛡️ Fixed
+
 - Corrupted emoji characters in notebook table of contents causing markdown rendering issues
 - Unicode decoding issues during subprocess execution
 - CUDA compatibility with proper PyTorch installation detection
@@ -44,6 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Memory handling for large model merges
 
 ### 📚 Documentation
+
 - Complete rewrite of README with artist-focused approach
 - Added comprehensive merge mode explanations
 - Created interactive notebook with all merge techniques

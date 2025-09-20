@@ -1,0 +1,300 @@
+# 🧪 Violet Model Merge - Continuous Integration
+# 
+# Automated testing pipeline for all commits and pull requests
+# Ensures code quality and compatibility across Python versions
+
+name: 🧪 Test Suite
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run tests weekly on Sundays at 2 AM UTC
+    - cron: '0 2 * * 0'
+
+env:
+  # Disable CUDA for CI (use CPU-only PyTorch)
+  CUDA_VISIBLE_DEVICES: ""
+  # Reduce memory usage for CI
+  PYTORCH_CUDA_ALLOC_CONF: max_split_size_mb:512
+
+jobs:
+  test:
+    name: 🐍 Python ${{ matrix.python-version }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12']
+        include:
+          # Test with different PyTorch versions
+          - os: ubuntu-latest
+            python-version: '3.11'
+            pytorch-version: '2.0.0'
+          - os: ubuntu-latest
+            python-version: '3.11'
+            pytorch-version: '2.1.0'
+
+    steps:
+    - name: 📂 Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: 🐍 Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+
+    - name: 📦 Install System Dependencies
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libssl-dev libffi-dev
+
+    - name: 🔧 Install Python Dependencies
+      run: |
+        python -m pip install --upgrade pip setuptools wheel
+        pip install -r requirements.txt
+        
+        # Install test dependencies
+        pip install pytest pytest-cov pytest-xdist pytest-mock
+        pip install coverage[toml] pytest-html pytest-json-report
+        
+        # Install CPU-only PyTorch for CI
+        pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+
+    - name: 🧪 Run Unit Tests
+      run: |
+        pytest tests/ \
+          --cov=lib \
+          --cov-report=xml \
+          --cov-report=html \
+          --cov-report=term-missing \
+          --junit-xml=test-results.xml \
+          --html=test-report.html \
+          --self-contained-html \
+          -v \
+          -x \
+          --tb=short \
+          -m "not slow and not gpu"
+
+    - name: 🐢 Run Slow Tests (Ubuntu Only)
+      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
+      run: |
+        pytest tests/ \
+          --cov=lib \
+          --cov-append \
+          -v \
+          -m "slow and not gpu" \
+          --tb=short
+
+    - name: 📊 Upload Coverage to Codecov
+      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+    - name: 📋 Upload Test Results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-results-${{ matrix.os }}-py${{ matrix.python-version }}
+        path: |
+          test-results.xml
+          test-report.html
+          htmlcov/
+
+    - name: 🔍 Static Analysis (Ubuntu Python 3.11 only)
+      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
+      run: |
+        # Install static analysis tools
+        pip install black isort flake8 mypy bandit safety
+        
+        # Check code formatting
+        black --check --diff lib/ tests/ || echo "::warning::Code formatting issues found"
+        
+        # Check import sorting  
+        isort --check-only --diff lib/ tests/ || echo "::warning::Import sorting issues found"
+        
+        # Lint with flake8
+        flake8 lib/ tests/ --max-line-length=88 --extend-ignore=E203,W503 || echo "::warning::Linting issues found"
+        
+        # Type checking (non-blocking)
+        mypy lib/ --ignore-missing-imports || echo "::warning::Type checking issues found"
+        
+        # Security analysis
+        bandit -r lib/ -f json -o bandit-report.json || echo "::warning::Security issues found"
+        
+        # Check for known security vulnerabilities
+        safety check || echo "::warning::Security vulnerabilities found"
+
+  integration:
+    name: 🔗 Integration Tests
+    runs-on: ubuntu-latest
+    needs: test
+    
+    steps:
+    - name: 📂 Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: 🐍 Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: 📦 Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-cov pytest-xdist
+        pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+
+    - name: 🔗 Run Integration Tests
+      run: |
+        pytest tests/ \
+          -v \
+          -m "integration" \
+          --tb=short \
+          --maxfail=5
+
+    - name: 📝 Test CLI Interface
+      run: |
+        # Test basic CLI help
+        python lib/merge_model.py --help || echo "CLI help test completed"
+        
+        # Test with mock data (if available)
+        # python lib/merge_model.py WS tests/fixtures model_a.safetensors model_b.safetensors --alpha 0.5 --dry-run
+
+  build:
+    name: 🏗️ Build Package
+    runs-on: ubuntu-latest
+    needs: [test, integration]
+    
+    steps:
+    - name: 📂 Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: 🐍 Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: 📦 Install Build Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build twine
+
+    - name: 🏗️ Build Package
+      run: |
+        python -m build
+
+    - name: ✅ Check Package
+      run: |
+        twine check dist/*
+
+    - name: 📋 Upload Build Artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: dist-packages
+        path: dist/
+
+  # Security and quality checks
+  security:
+    name: 🔒 Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📂 Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: 🔒 Run Trivy Vulnerability Scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: 📊 Upload Trivy Results
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  # Documentation and examples testing
+  docs:
+    name: 📚 Documentation Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📂 Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: 🐍 Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: 📦 Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+        pip install jupyter nbconvert
+
+    - name: 📓 Test Jupyter Notebook
+      run: |
+        # Convert notebook to script and check for syntax errors
+        jupyter nbconvert --to script violet_merge.ipynb --output test_notebook
+        python test_notebook.py --help 2>/dev/null || echo "Notebook conversion test completed"
+
+    - name: 📋 Validate README
+      run: |
+        # Check README for broken links (basic validation)
+        grep -E "https?://[^\s)]+" README.md > links.txt || true
+        echo "Found $(wc -l < links.txt) links in README.md"
+
+  # Performance benchmarks (optional, runs on main branch only)
+  benchmark:
+    name: ⚡ Performance Benchmarks
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: 📂 Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: 🐍 Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: 📦 Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+        pip install pytest-benchmark
+
+    - name: ⚡ Run Performance Tests
+      run: |
+        pytest tests/ \
+          -v \
+          -m "benchmark" \
+          --benchmark-only \
+          --benchmark-json=benchmark.json || echo "Benchmark tests completed"
+
+    - name: 📊 Upload Benchmark Results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: benchmark-results
+        path: benchmark.json

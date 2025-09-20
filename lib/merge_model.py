@@ -800,9 +800,14 @@ class ModelMerger:
             layer_beta = self._resolve_layer_weight(key, beta, models) if self.config.mode.needs_beta else None
             
             # Apply merge algorithm
-            if self.config.mode.needs_beta and layer_beta is not None and theta_2 is not None:
+            if self.config.mode in [MergeMode.AD, MergeMode.SAD, MergeMode.MD] and theta_2 is not None and layer_beta is not None:
+                # 3-model merge (AD, SAD, MD)
                 theta_0[key] = merge_func(a, b, theta_2[key], layer_alpha, layer_beta)
+            elif self.config.mode.needs_beta and layer_beta is not None:
+                # 2-model merge with beta (DARE, etc.)
+                theta_0[key] = merge_func(a, b, layer_alpha, layer_beta)
             else:
+                # Standard 2-model merge
                 theta_0[key] = merge_func(a, b, layer_alpha)
             
             # Apply fine-tuning if specified
