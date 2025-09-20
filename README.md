@@ -4,7 +4,7 @@
 >
 > *Derived from [Chattiori Model Merger](https://github.com/faildes) by Chattiori*
 
-[![Version](https://img.shields.io/badge/version-1.2.1-8A2BE2?style=for-the-badge&logoColor=white)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.3.0-8A2BE2?style=for-the-badge&logoColor=white)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://python.org)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-red.svg)](https://pytorch.org)
 [![CUDA](https://img.shields.io/badge/CUDA-Optional-green.svg)](https://developer.nvidia.com/cuda-zone)
@@ -17,6 +17,7 @@
 
 🚀 **Multiple Merge Algorithms** — 20+ sophisticated merge modes from simple weighted sums to advanced cosine structure blending  
 💻 **Interactive Notebook** — Artist-friendly Jupyter interface with comprehensive documentation and clean error handling  
+📊 **Metadata Editor** — CSV-based SafeTensors metadata management for batch editing descriptions, authors, and tags  
 ⚡ **GPU Acceleration** — CUDA support for faster merging of large models  
 🛡️ **Robust Error Handling** — Clear, friendly error messages with detailed logging  
 🎯 **Deterministic Results** — Consistent, reproducible merges every time  
@@ -67,6 +68,41 @@ For advanced users who prefer terminal workflows:
 python lib/merge_model.py WS models "model_a.safetensors" "model_b.safetensors" --alpha 0.4
 ```
 
+#### 📊 **[Metadata Manager](#-metadata-management)**
+CSV-based SafeTensors metadata editing for batch operations:
+
+```bash
+jupyter lab metadata_manager.ipynb
+```
+
+---
+
+## 📊 Metadata Management
+
+The **metadata manager notebook** provides a powerful, user-friendly way to edit SafeTensors metadata in bulk using CSV files. Perfect for maintaining clean, consistent metadata across your entire model collection! 💜
+
+### 🎯 Metadata Features
+
+- 📤 **Export to CSV** — Extract metadata from models/VAEs into editable spreadsheets
+- ✏️ **Easy Editing** — Use Excel, Google Sheets, or any CSV editor you prefer  
+- 📥 **Safe Import** — Apply changes back with automatic backups and validation
+- 🔒 **Non-destructive** — Original files are backed up before any changes
+- 🎯 **Batch Processing** — Edit hundreds of models at once efficiently
+
+### 🚀 Quick Workflow
+
+1. **📊 Export** → `metadata_manager.ipynb` creates editable CSV from your models
+2. **✏️ Edit** → Open CSV in your favorite editor, update descriptions, authors, tags
+3. **💾 Import** → Apply changes back to your models with automatic validation
+
+### Example Use Cases
+
+- **🏷️ Bulk Tagging** — Add consistent tags across model collections
+- **👤 Author Updates** — Set proper attribution for all your models
+- **📝 Descriptions** — Add detailed descriptions for better organization
+- **🔄 Version Control** — Track model versions and modifications
+- **🧹 Cleanup** — Standardize metadata formatting across collections
+
 ---
 
 ## 📋 Requirements
@@ -93,9 +129,11 @@ pip install -r requirements.txt
 ```
 Violet-Model-Merge/
 ├── 📒 violet_merge.ipynb          # Main interactive notebook
-├── 📁 lib/                        # Core Python modules
+├── � metadata_manager.ipynb      # CSV-based metadata editor
+├── �📁 lib/                        # Core Python modules
 │   ├── merge_model.py             # Main merging engine
 │   ├── utils.py                   # Utility functions
+│   ├── metadata_csv.py            # Metadata management
 │   └── lora_bake.py              # LoRA integration
 ├── 📁 models/                     # Your model files (.safetensors, .ckpt)
 ├── 📁 vae/                        # VAE files for baking

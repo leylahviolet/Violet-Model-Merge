@@ -955,7 +955,7 @@ class ModelMerger:
         fp = "fp8" if self.config.save_quarter else ("fp16" if self.config.save_half else "fp32")
         
         merge_recipe = {
-            "type": "merge-models-chattiori",
+            "type": "violet-model-merge",
             "primary_model_hash": models.get('model_0_sha256'),
             "secondary_model_hash": models.get('model_1_sha256'),
             "tertiary_model_hash": models.get('model_2_sha256'),
@@ -969,7 +969,7 @@ class ModelMerger:
             },
             "precision": fp,
             "output_name": self.config.output,
-            "bake_in_vae": models.get('vae_name', False),
+            "bake_in_vae": models.get('vae_name') if 'vae' in models else False,
             "pruned": self.config.prune,
             "fine_tuning": self.config.fine
         }

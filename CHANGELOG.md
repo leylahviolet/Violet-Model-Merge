@@ -15,6 +15,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.0] - 2025-09-20
+
+### ✨ Added
+
+- **Metadata Manager**: Complete CSV-based SafeTensors metadata editing system
+  - 📊 Export model and VAE metadata to editable CSV files
+  - ✏️ Batch edit descriptions, authors, tags, and custom metadata
+  - 📥 Safe import with automatic backups and validation
+  - 🎯 Support for both model and VAE collections
+- **Interactive Metadata Notebook**: User-friendly Jupyter interface for metadata management
+  - Clean, artist-focused workflow for bulk metadata operations
+  - Excel/Google Sheets compatibility for familiar editing experience
+  - Non-destructive editing with automatic file backups
+- **Enhanced Project Structure**: Added `metadata_csv.py` module for robust metadata handling
+
+### 🔧 Changed
+
+- Updated project documentation to reflect new metadata editing capabilities
+- Enhanced README with comprehensive metadata management section
+- Improved project structure visualization including metadata manager notebook
+
+### 📚 Documentation
+
+- Added detailed metadata management workflow and examples
+- Created comprehensive feature overview for CSV-based editing
+- Enhanced project structure documentation with new components
+
+---
+
 ## [1.2.1] - 2025-09-19
 
 ### 🚀 Performance
